@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS } from '../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, SHADOWS } from '../constants/theme';
+import TransactionSuccessState from '../components/TransactionSuccessState';
+import TransactionErrorState from '../components/TransactionErrorState';
+import PinEntryBottomSheet from '../components/PinEntryBottomSheet';
+import OtpEntryBottomSheet from '../components/OtpEntryBottomSheet';
 
 // Mock Data for "Your Numbers"
 const MY_NUMBERS = [
@@ -39,7 +44,8 @@ export default function DataPurchaseFlow({ onDone }: { onDone: () => void }) {
     const NETWORKS = ['MTN', 'Telecel', 'AT'];
 
     // Flow State
-    const [step, setStep] = useState<'recipient' | 'package' | 'payment' | 'confirm'>('recipient');
+    const [step, setStep] = useState<'recipient' | 'package' | 'payment' | 'confirm' | 'processing' | 'success' | 'error'>('recipient');
+    const [errorMsg, setErrorMsg] = useState('');
 
     // Package State
     const [selectedPackageId, setSelectedPackageId] = useState<string>(DATA_PACKAGES[1].id);
@@ -48,9 +54,12 @@ export default function DataPurchaseFlow({ onDone }: { onDone: () => void }) {
     // Payment State
     const [paymentMethod, setPaymentMethod] = useState<'momo' | 'telecel' | 'at' | 'card'>('momo');
 
+    const mtnNumber = MY_NUMBERS.find(n => n.network === 'MTN')?.number;
+    const telecelNumber = MY_NUMBERS.find(n => n.network === 'TELECEL')?.number;
+
     const PAYMENT_METHODS = [
-        { id: 'momo', name: 'MTN Mobile Money', color: '#FCD34D', icon: 'phone-portrait-outline' }, // Yellow
-        { id: 'telecel', name: 'Telecel Cash', color: '#EF4444', icon: 'phone-portrait-outline' }, // Red
+        { id: 'momo', name: 'MTN Mobile Money', color: '#FCD34D', icon: 'phone-portrait-outline', subtitle: mtnNumber }, // Yellow
+        { id: 'telecel', name: 'Telecel Cash', color: '#EF4444', icon: 'phone-portrait-outline', subtitle: telecelNumber }, // Red
         { id: 'at', name: 'AT Money', color: '#3B82F6', icon: 'phone-portrait-outline' }, // Blue
         { id: 'card', name: 'Credit Card', color: '#64748B', icon: 'card-outline' }, // Slate
     ];
@@ -67,9 +76,16 @@ export default function DataPurchaseFlow({ onDone }: { onDone: () => void }) {
         setSelectedCardId(cardId);
     };
 
+    // Card Bottom Sheet State
+    const [showCardBottomSheet, setShowCardBottomSheet] = useState(false);
+
     // Save Number Feature
     const [saveNumber, setSaveNumber] = useState(false);
     const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string>('new');
+
+    // PIN & OTP State
+    const [showPinSheet, setShowPinSheet] = useState(false);
+    const [showOtpSheet, setShowOtpSheet] = useState(false);
 
     // Mock Beneficiaries State
     const [savedBeneficiaries] = useState(SAVED_BENEFICIARIES);
@@ -85,6 +101,23 @@ export default function DataPurchaseFlow({ onDone }: { onDone: () => void }) {
         }
     };
 
+    // PIN Verification Handler
+    const handlePinVerify = (pin: string) => {
+        console.log('PIN entered:', pin);
+        setShowPinSheet(false);
+        setTimeout(() => setShowOtpSheet(true), 300);
+    };
+
+    // OTP Verification Handler
+    const handleOtpVerify = (otp: string) => {
+        console.log('OTP entered:', otp);
+        setShowOtpSheet(false);
+        setStep('processing');
+        setTimeout(() => {
+            setStep('success');
+        }, 2000);
+    };
+
     // Handlers
     const handleContinue = () => {
         if (step === 'recipient') {
@@ -93,8 +126,10 @@ export default function DataPurchaseFlow({ onDone }: { onDone: () => void }) {
             setStep('payment');
         } else if (step === 'payment') {
             setStep('confirm');
+        } else if (step === 'confirm') {
+            setShowPinSheet(true);
         } else {
-            onDone(); // Exit after final confirmation
+            onDone();
         }
     };
 
@@ -116,111 +151,339 @@ export default function DataPurchaseFlow({ onDone }: { onDone: () => void }) {
         <View style={styles.container}>
             {/* Header Area */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back-circle-outline" size={32} color={COLORS.textDark} />
+                <TouchableOpacity onPress={handleBack} style={styles.backButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="arrow-back" size={24} color={COLORS.textDark} />
                 </TouchableOpacity>
-                <View style={{ marginTop: 10 }}>
+                <View>
                     <Text style={styles.title}>Purchase Data</Text>
-                    <Text style={styles.subtitle}>
-                        {step === 'package'
-                            ? `Select data bundle for ${recipientType === 'myself' ? 'self' : 'others'}`
-                            : 'Buy data instantly'}
-                    </Text>
+                    <Text style={styles.subtitle}>Buy data instantly</Text>
                 </View>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* Success State */}
+            {step === 'success' && (
+                <TransactionSuccessState
+                    message="Data Purchased Successfully"
+                    subMessage={`${selectedPkg?.volume} data has been sent to ${recipientType === 'myself' ? 'your number' : othersPhoneNumber || 'the recipient'}.`}
+                    onDone={onDone}
+                />
+            )}
 
-                {step === 'recipient' && (
-                    <>
-                        {/* Recipient Selector Section */}
-                        <Text style={styles.sectionHeader}>Who are you buying for?</Text>
+            {/* Error State */}
+            {step === 'error' && (
+                <TransactionErrorState
+                    message={errorMsg || "Something went wrong. Please try again."}
+                    onRetry={() => setStep('confirm')}
+                    onClose={onDone}
+                />
+            )}
 
-                        {/* Myself Card */}
-                        <TouchableOpacity
-                            style={[styles.radioCard, recipientType === 'myself' && styles.radioCardSelected]}
-                            onPress={() => setRecipientType('myself')}
-                        >
-                            <View style={styles.radioCardContent}>
-                                <View style={styles.radioIconCircle}>
-                                    <Ionicons name="person" size={24} color={COLORS.textDark} />
-                                </View>
-                                <Text style={styles.radioCardLabel}>Myself</Text>
-                            </View>
-                            <View style={styles.radioOuter}>
-                                {recipientType === 'myself' && <View style={styles.radioInner} />}
-                            </View>
-                        </TouchableOpacity>
+            {/* Processing State */}
+            {step === 'processing' && (
+                <LinearGradient colors={[COLORS.primaryLight, COLORS.background]} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+                    <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', marginBottom: 24, ...SHADOWS.md }}>
+                        <ActivityIndicator size="large" color={COLORS.primary} />
+                    </View>
+                    <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.textDark, marginBottom: 8 }}>Processing...</Text>
+                    <Text style={{ fontSize: 14, color: COLORS.textGrey }}>Please wait a moment</Text>
+                </LinearGradient>
+            )}
 
-                        {/* Others Card */}
-                        <TouchableOpacity
-                            style={[styles.radioCard, recipientType === 'others' && styles.radioCardSelected]}
-                            onPress={() => setRecipientType('others')}
-                        >
-                            <View style={styles.radioCardContent}>
-                                <View style={styles.radioIconCircle}>
-                                    <Ionicons name="person" size={24} color={COLORS.textDark} />
-                                </View>
-                                <Text style={styles.radioCardLabel}>Others</Text>
-                            </View>
-                            <View style={styles.radioOuter}>
-                                {recipientType === 'others' && <View style={styles.radioInner} />}
-                            </View>
-                        </TouchableOpacity>
+            {/* Main Content */}
+            {step !== 'success' && step !== 'error' && step !== 'processing' && (
+                <>
+                    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-
-                        {/* Number Selection Section */}
-                        {recipientType === 'myself' && (
+                        {step === 'recipient' && (
                             <>
-                                <Text style={[styles.sectionHeader, { marginTop: 24 }]}>Your Number</Text>
+                                {/* Recipient Selector Section */}
+                                <Text style={styles.sectionHeader}>Who are you buying for?</Text>
 
-                                {MY_NUMBERS.map((item) => {
-                                    const isSelected = selectedNumberId === item.id;
-                                    return (
+                                {/* Myself Card */}
+                                <TouchableOpacity
+                                    style={[styles.radioCard, recipientType === 'myself' && styles.radioCardSelected]}
+                                    onPress={() => setRecipientType('myself')}
+                                >
+                                    <View style={styles.radioCardContent}>
+                                        <View style={styles.radioIconCircle}>
+                                            <Ionicons name="person" size={24} color={recipientType === 'myself' ? COLORS.white : COLORS.textDark} />
+                                        </View>
+                                        <Text style={[styles.radioCardLabel, recipientType === 'myself' && { color: COLORS.white }]}>Myself</Text>
+                                    </View>
+                                    <View style={styles.radioOuter}>
+                                        {recipientType === 'myself' && <View style={styles.radioInner} />}
+                                    </View>
+                                </TouchableOpacity>
+
+                                {/* Others Card */}
+                                <TouchableOpacity
+                                    style={[styles.radioCard, recipientType === 'others' && styles.radioCardSelected]}
+                                    onPress={() => setRecipientType('others')}
+                                >
+                                    <View style={styles.radioCardContent}>
+                                        <View style={styles.radioIconCircle}>
+                                            <Ionicons name="person" size={24} color={recipientType === 'others' ? COLORS.white : COLORS.textDark} />
+                                        </View>
+                                        <Text style={[styles.radioCardLabel, recipientType === 'others' && { color: COLORS.white }]}>Others</Text>
+                                    </View>
+                                    <View style={styles.radioOuter}>
+                                        {recipientType === 'others' && <View style={styles.radioInner} />}
+                                    </View>
+                                </TouchableOpacity>
+
+
+                                {/* Number Selection Section */}
+                                {recipientType === 'myself' && (
+                                    <>
+                                        <Text style={[styles.sectionHeader, { marginTop: 24 }]}>Your Number</Text>
+
+                                        {MY_NUMBERS.map((item) => {
+                                            const isSelected = selectedNumberId === item.id;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={item.id}
+                                                    style={[styles.radioCard, isSelected && styles.radioCardSelected]}
+                                                    onPress={() => setSelectedNumberId(item.id)}
+                                                >
+                                                    <View style={styles.radioCardContent}>
+                                                        <View style={{ marginRight: 12 }}>
+                                                            <Ionicons name="call" size={24} color={isSelected ? COLORS.white : COLORS.textDark} />
+                                                        </View>
+                                                        <View>
+                                                            <Text style={[styles.phoneText, isSelected && { color: COLORS.white }]}>{item.number}</Text>
+                                                            <Text style={[styles.networkText, isSelected && { color: COLORS.white }]}>{item.network}</Text>
+                                                        </View>
+                                                    </View>
+                                                    <View style={styles.radioOuter}>
+                                                        {isSelected && <View style={styles.radioInner} />}
+                                                    </View>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </>
+                                )}
+
+                                {/* Others Selection Flow */}
+                                {recipientType === 'others' && (
+                                    <View style={{ marginTop: 24 }}>
+                                        {/* Saved Beneficiaries Section */}
+                                        <Text style={styles.sectionHeader}>Select Recipient</Text>
+
+                                        {savedBeneficiaries.map((bene) => {
+                                            const isSelected = selectedBeneficiaryId === bene.id;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={bene.id}
+                                                    style={[styles.radioCard, isSelected && styles.radioCardSelected]}
+                                                    onPress={() => handleSelectBeneficiary(bene.id, bene)}
+                                                >
+                                                    <View style={styles.radioCardContent}>
+                                                        <View style={{ marginRight: 12 }}>
+                                                            <Ionicons name="person-circle-outline" size={32} color={isSelected ? COLORS.white : COLORS.textDark} />
+                                                        </View>
+                                                        <View>
+                                                            <Text style={[styles.radioCardLabel, isSelected && { color: COLORS.white }]}>{bene.name}</Text>
+                                                            <Text style={[styles.networkText, isSelected && { color: COLORS.white }]}>{bene.number} ({bene.network})</Text>
+                                                        </View>
+                                                    </View>
+                                                    <View style={styles.radioOuter}>
+                                                        {isSelected && <View style={styles.radioInner} />}
+                                                    </View>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+
+                                        {/* New Number Option */}
                                         <TouchableOpacity
-                                            key={item.id}
-                                            style={[styles.radioCard, isSelected && styles.radioCardSelected]}
-                                            onPress={() => setSelectedNumberId(item.id)}
+                                            style={[styles.radioCard, selectedBeneficiaryId === 'new' && styles.radioCardSelected]}
+                                            onPress={() => handleSelectBeneficiary('new')}
                                         >
                                             <View style={styles.radioCardContent}>
                                                 <View style={{ marginRight: 12 }}>
-                                                    <Ionicons name="call" size={24} color={COLORS.textDark} />
+                                                    <Ionicons name="add-circle-outline" size={32} color={selectedBeneficiaryId === 'new' ? COLORS.white : COLORS.textDark} />
                                                 </View>
-                                                <View>
-                                                    <Text style={styles.phoneText}>{item.number}</Text>
-                                                    <Text style={styles.networkText}>{item.network}</Text>
-                                                </View>
+                                                <Text style={[styles.radioCardLabel, selectedBeneficiaryId === 'new' && { color: COLORS.white }]}>Enter New Number</Text>
                                             </View>
                                             <View style={styles.radioOuter}>
-                                                {isSelected && <View style={styles.radioInner} />}
+                                                {selectedBeneficiaryId === 'new' && <View style={styles.radioInner} />}
                                             </View>
                                         </TouchableOpacity>
-                                    );
-                                })}
+
+                                        {selectedBeneficiaryId === 'new' && (
+                                            <View style={{ marginTop: 20, marginLeft: 8, borderLeftWidth: 2, borderLeftColor: '#E2E8F0', paddingLeft: 16 }}>
+                                                <Text style={styles.fieldLabel}>Choose network</Text>
+
+                                                <TouchableOpacity
+                                                    style={styles.dropdownSelector}
+                                                    onPress={() => setIsNetworkDropdownOpen(!isNetworkDropdownOpen)}
+                                                >
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                        <View style={styles.networkIconCircle} />
+                                                        <Text style={styles.dropdownText}>{selectedNetwork}</Text>
+                                                    </View>
+                                                    <Ionicons name={isNetworkDropdownOpen ? "chevron-up" : "chevron-down"} size={24} color={COLORS.textDark} />
+                                                </TouchableOpacity>
+
+                                                {/* Dropdown Options */}
+                                                {isNetworkDropdownOpen && (
+                                                    <View style={styles.dropdownList}>
+                                                        {NETWORKS.map((network) => (
+                                                            <TouchableOpacity
+                                                                key={network}
+                                                                style={styles.dropdownOption}
+                                                                onPress={() => {
+                                                                    setSelectedNetwork(network);
+                                                                    setIsNetworkDropdownOpen(false);
+                                                                }}
+                                                            >
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                                    <View style={[styles.networkIconCircle, { width: 24, height: 24, borderRadius: 12, marginRight: 8 }]} />
+                                                                    <Text style={styles.dropdownOptionText}>{network}</Text>
+                                                                </View>
+                                                                {selectedNetwork === network && (
+                                                                    <Ionicons name="checkmark" size={20} color={COLORS.primary} />
+                                                                )}
+                                                            </TouchableOpacity>
+                                                        ))}
+                                                    </View>
+                                                )}
+
+                                                <View style={{ marginTop: 20 }}>
+                                                    <Text style={styles.fieldLabel}>Enter phone number</Text>
+                                                    <View style={styles.inputContainer}>
+                                                        <TextInput
+                                                            style={[styles.inputText, { flex: 1 }]}
+                                                            value={othersPhoneNumber}
+                                                            onChangeText={setOthersPhoneNumber}
+                                                            placeholder="055 482 4425"
+                                                            keyboardType="phone-pad"
+                                                        />
+                                                        <TouchableOpacity>
+                                                            <MaterialCommunityIcons name="contacts" size={24} color={COLORS.textDark} />
+                                                        </TouchableOpacity>
+                                                    </View>
+
+                                                    {/* Save Number Checkbox */}
+                                                    <TouchableOpacity
+                                                        style={styles.checkboxContainer}
+                                                        onPress={() => setSaveNumber(!saveNumber)}
+                                                    >
+                                                        <Ionicons
+                                                            name={saveNumber ? "checkbox" : "square-outline"}
+                                                            size={24}
+                                                            color={saveNumber ? COLORS.primary : COLORS.textGrey}
+                                                        />
+                                                        <Text style={styles.checkboxLabel}>Save number for future reference</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
                             </>
                         )}
 
-                        {/* Others Selection Flow */}
-                        {recipientType === 'others' && (
-                            <View style={{ marginTop: 24 }}>
-                                {/* Saved Beneficiaries Section */}
-                                <Text style={styles.sectionHeader}>Select Recipient</Text>
+                        {/* PACKAGE SELECTION STEP (Replaces Amount) */}
+                        {step === 'package' && (
+                            <View style={{ marginTop: 10 }}>
+                                <Text style={styles.fieldLabel}>Select Data Bundle</Text>
+                                <Text style={styles.helperLabel}>Choose a package that suits your needs</Text>
 
-                                {savedBeneficiaries.map((bene) => {
-                                    const isSelected = selectedBeneficiaryId === bene.id;
+                                {DATA_PACKAGES.map((pkg) => {
+                                    const isSelected = selectedPackageId === pkg.id;
                                     return (
                                         <TouchableOpacity
-                                            key={bene.id}
+                                            key={pkg.id}
                                             style={[styles.radioCard, isSelected && styles.radioCardSelected]}
-                                            onPress={() => handleSelectBeneficiary(bene.id, bene)}
+                                            onPress={() => setSelectedPackageId(pkg.id)}
                                         >
-                                            <View style={styles.radioCardContent}>
+                                            <View style={[styles.radioCardContent, { flex: 1 }]}>
                                                 <View style={{ marginRight: 12 }}>
-                                                    <Ionicons name="person-circle-outline" size={32} color={COLORS.textDark} />
+                                                    <Ionicons name="wifi" size={24} color={isSelected ? COLORS.white : COLORS.textDark} />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <Text style={[styles.radioCardLabel, isSelected && { color: COLORS.white }]}>{pkg.name}</Text>
+                                                        <Text style={[styles.radioCardLabel, isSelected ? { color: COLORS.white } : { color: COLORS.primary }]}>{pkg.volume}</Text>
+                                                    </View>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                                                        <Text style={[styles.networkText, isSelected && { color: COLORS.white }]}>{pkg.validity}</Text>
+                                                        <Text style={[styles.networkText, isSelected && { color: COLORS.white }]}>GHC {pkg.price}</Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                            <View style={[styles.radioOuter, { marginLeft: 12 }]}>
+                                                {isSelected && <View style={styles.radioInner} />}
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        )}
+
+
+                        {/* PAYMENT METHOD STEP */}
+                        {step === 'payment' && (
+                            <View style={{ marginTop: 10 }}>
+                                <Text style={styles.sectionHeader}>Confirm Purchase</Text>
+
+                                {/* Summary Card */}
+                                <View style={styles.paymentSummaryCard}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                                        <View style={styles.paymentIconBox}>
+                                            <Ionicons name="wifi-outline" size={24} color={COLORS.textDark} />
+                                        </View>
+                                    </View>
+                                    <Text style={styles.paymentSummaryLabel}>
+                                        Buying Data ({selectedPkg?.volume}) For {recipientType === 'myself' ? 'Self' : 'Other'}
+                                    </Text>
+                                    <Text style={styles.paymentSummaryNumber}>
+                                        {recipientType === 'myself'
+                                            ? MY_NUMBERS.find(n => n.id === selectedNumberId)?.number
+                                            : othersPhoneNumber || 'N/A'}
+                                    </Text>
+
+                                    {recipientType === 'others' && (
+                                        <View style={{ marginTop: 12 }}>
+                                            <Text style={styles.paymentSummaryLabel}>Network</Text>
+                                            <Text style={styles.paymentSummaryNumber}>{selectedNetwork}</Text>
+                                        </View>
+                                    )}
+
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
+                                        <View>
+                                            <Text style={styles.paymentSummaryValueLabel}>Amount to Pay</Text>
+                                            <Text style={styles.paymentSummaryValue}>GHC {selectedPkg?.price}</Text>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {/* Payment Method Selection */}
+                                <Text style={[styles.sectionHeader, { marginTop: 24 }]}>Payment Method</Text>
+
+                                {/* Render Payment Methods */}
+                                {PAYMENT_METHODS.map((method) => {
+                                    const isSelected = paymentMethod === method.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={method.id}
+                                            style={[styles.paymentMethodCard, isSelected && styles.paymentMethodSelected, { marginBottom: 12 }]}
+                                            onPress={() => {
+                                                setPaymentMethod(method.id as any);
+                                                if (method.id === 'card') {
+                                                    setShowCardBottomSheet(true);
+                                                }
+                                            }}
+                                        >
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <View style={[styles.paymentMethodIcon, { backgroundColor: method.color, alignItems: 'center', justifyContent: 'center' }]}>
+                                                    <Ionicons name={method.icon as any} size={14} color={COLORS.white} />
                                                 </View>
                                                 <View>
-                                                    <Text style={styles.radioCardLabel}>{bene.name}</Text>
-                                                    <Text style={styles.networkText}>{bene.number} ({bene.network})</Text>
+                                                    <Text style={[styles.paymentMethodText, isSelected && { color: COLORS.white }]}>{method.name}</Text>
+                                                    {method.subtitle && (
+                                                        <Text style={[styles.networkText, { fontSize: 13, marginTop: 2 }, isSelected && { color: COLORS.white }]}>{method.subtitle}</Text>
+                                                    )}
                                                 </View>
                                             </View>
                                             <View style={styles.radioOuter}>
@@ -229,680 +492,313 @@ export default function DataPurchaseFlow({ onDone }: { onDone: () => void }) {
                                         </TouchableOpacity>
                                     );
                                 })}
+                            </View>
+                        )}
 
-                                {/* New Number Option */}
-                                <TouchableOpacity
-                                    style={[styles.radioCard, selectedBeneficiaryId === 'new' && styles.radioCardSelected]}
-                                    onPress={() => handleSelectBeneficiary('new')}
-                                >
-                                    <View style={styles.radioCardContent}>
-                                        <View style={{ marginRight: 12 }}>
-                                            <Ionicons name="add-circle-outline" size={32} color={COLORS.textDark} />
+
+                        {/* CONFIRMATION STEP */}
+                        {step === 'confirm' && (
+                            <View style={{ marginTop: 10 }}>
+                                <Text style={styles.sectionHeader}>Confirm Details</Text>
+
+                                <View style={styles.detailsContainer}>
+                                    {/* Package */}
+                                    <View style={styles.detailRow}>
+                                        <Text style={styles.detailLabel}>Package</Text>
+                                        <Text style={styles.detailValue}>{selectedPkg?.name}</Text>
+                                    </View>
+                                    {/* Volume */}
+                                    <View style={styles.detailRow}>
+                                        <Text style={styles.detailLabel}>Volume</Text>
+                                        <Text style={styles.detailValue}>{selectedPkg?.volume}</Text>
+                                    </View>
+
+                                    {/* Amount */}
+                                    <View style={styles.detailRow}>
+                                        <Text style={styles.detailLabel}>Price</Text>
+                                        <Text style={styles.detailValue}>GHC {selectedPkg?.price}</Text>
+                                    </View>
+
+                                    {/* Recipient Number */}
+                                    <View style={styles.detailRow}>
+                                        <Text style={styles.detailLabel}>Recipient Number</Text>
+                                        <Text style={styles.detailValue}>
+                                            {recipientType === 'myself'
+                                                ? MY_NUMBERS.find(n => n.id === selectedNumberId)?.number
+                                                : othersPhoneNumber || 'N/A'}
+                                        </Text>
+                                    </View>
+
+                                    {/* Payment Method */}
+                                    <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                                        <Text style={styles.detailLabel}>Payment Method</Text>
+                                        <Text style={styles.detailValue}>
+                                            {PAYMENT_METHODS.find(m => m.id === paymentMethod)?.name}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {/* Transaction Notice */}
+                                <View style={styles.noticeCard}>
+                                    <View style={styles.noticeIconCircle}>
+                                        <Ionicons name="information-circle" size={22} color={COLORS.primary} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.noticeTitle}>Please Note</Text>
+                                        <Text style={styles.noticeText}>This transaction is final and cannot be reversed once confirmed.</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+
+
+                    </ScrollView>
+
+                    {/* Bottom Button */}
+                    <View style={styles.footer}>
+                        <TouchableOpacity style={styles.continueButton} onPress={handleContinue} activeOpacity={0.85}>
+                            <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.continueGradient}>
+                                <Text style={styles.continueText}>
+                                    {step === 'confirm' ? 'Confirm & Pay' : step === 'payment' ? 'Proceed to Confirm' : 'Continue'}
+                                </Text>
+                                <Ionicons name="arrow-forward" size={18} color={COLORS.white} style={{ marginLeft: 8 }} />
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </View>
+                </>
+            )}
+
+            {/* Credit Card Bottom Sheet */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={showCardBottomSheet}
+                onRequestClose={() => setShowCardBottomSheet(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.bottomSheetContainer}>
+                        {/* Header */}
+                        <View style={styles.bottomSheetHeader}>
+                            <Text style={styles.bottomSheetTitle}>Select Card</Text>
+                            <TouchableOpacity onPress={() => setShowCardBottomSheet(false)}>
+                                <Ionicons name="close" size={28} color={COLORS.textDark} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={styles.bottomSheetContent} showsVerticalScrollIndicator={false}>
+                            {/* Saved Cards */}
+                            {savedCards.map((card) => {
+                                const isSelected = selectedCardId === card.id;
+                                return (
+                                    <TouchableOpacity
+                                        key={card.id}
+                                        style={[styles.radioCard, isSelected && styles.radioCardSelected, { marginBottom: 12 }]}
+                                        onPress={() => handleSelectCard(card.id)}
+                                    >
+                                        <View style={styles.radioCardContent}>
+                                            <View style={{ marginRight: 12 }}>
+                                                <Ionicons name="card" size={24} color={isSelected ? COLORS.white : COLORS.textDark} />
+                                            </View>
+                                            <View>
+                                                <Text style={[styles.radioCardLabel, isSelected && { color: COLORS.white }]}>{card.type} **** {card.last4}</Text>
+                                                <Text style={[styles.networkText, isSelected && { color: COLORS.white }]}>Expires {card.expiry}</Text>
+                                            </View>
                                         </View>
-                                        <Text style={styles.radioCardLabel}>Enter New Number</Text>
+                                        <View style={styles.radioOuter}>
+                                            {isSelected && <View style={styles.radioInner} />}
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+
+                            {/* Add New Card Option */}
+                            <TouchableOpacity
+                                style={[styles.radioCard, selectedCardId === 'new' && styles.radioCardSelected, { marginBottom: 16 }]}
+                                onPress={() => handleSelectCard('new')}
+                            >
+                                <View style={styles.radioCardContent}>
+                                    <View style={{ marginRight: 12 }}>
+                                        <Ionicons name="add-circle-outline" size={32} color={selectedCardId === 'new' ? COLORS.white : COLORS.textDark} />
                                     </View>
-                                    <View style={styles.radioOuter}>
-                                        {selectedBeneficiaryId === 'new' && <View style={styles.radioInner} />}
+                                    <Text style={[styles.radioCardLabel, selectedCardId === 'new' && { color: COLORS.white }]}>Add New Card</Text>
+                                </View>
+                                <View style={styles.radioOuter}>
+                                    {selectedCardId === 'new' && <View style={styles.radioInner} />}
+                                </View>
+                            </TouchableOpacity>
+
+                            {/* New Card Form */}
+                            {selectedCardId === 'new' && (
+                                <View style={{ marginTop: 8 }}>
+                                    <Text style={styles.fieldLabel}>Card Number</Text>
+                                    <View style={[styles.inputContainer, { marginBottom: 16 }]}>
+                                        <TextInput
+                                            style={[styles.inputText, { flex: 1 }]}
+                                            placeholder="0000 0000 0000 0000"
+                                            keyboardType="numeric"
+                                            value={cardDetails.number}
+                                            onChangeText={(text) => setCardDetails({ ...cardDetails, number: text })}
+                                        />
+                                        <Ionicons name="card-outline" size={24} color={COLORS.textGrey} />
                                     </View>
-                                </TouchableOpacity>
 
-                                {selectedBeneficiaryId === 'new' && (
-                                    <View style={{ marginTop: 20, marginLeft: 8, borderLeftWidth: 2, borderLeftColor: '#E2E8F0', paddingLeft: 16 }}>
-                                        <Text style={styles.fieldLabel}>Choose network</Text>
-
-                                        <TouchableOpacity
-                                            style={styles.dropdownSelector}
-                                            onPress={() => setIsNetworkDropdownOpen(!isNetworkDropdownOpen)}
-                                        >
-                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                <View style={styles.networkIconCircle} />
-                                                <Text style={styles.dropdownText}>{selectedNetwork}</Text>
-                                            </View>
-                                            <Ionicons name={isNetworkDropdownOpen ? "chevron-up" : "chevron-down"} size={24} color={COLORS.textDark} />
-                                        </TouchableOpacity>
-
-                                        {/* Dropdown Options */}
-                                        {isNetworkDropdownOpen && (
-                                            <View style={styles.dropdownList}>
-                                                {NETWORKS.map((network) => (
-                                                    <TouchableOpacity
-                                                        key={network}
-                                                        style={styles.dropdownOption}
-                                                        onPress={() => {
-                                                            setSelectedNetwork(network);
-                                                            setIsNetworkDropdownOpen(false);
-                                                        }}
-                                                    >
-                                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                            <View style={[styles.networkIconCircle, { width: 24, height: 24, borderRadius: 12, marginRight: 8 }]} />
-                                                            <Text style={styles.dropdownOptionText}>{network}</Text>
-                                                        </View>
-                                                        {selectedNetwork === network && (
-                                                            <Ionicons name="checkmark" size={20} color={COLORS.primary} />
-                                                        )}
-                                                    </TouchableOpacity>
-                                                ))}
-                                            </View>
-                                        )}
-
-                                        <View style={{ marginTop: 20 }}>
-                                            <Text style={styles.fieldLabel}>Enter phone number</Text>
+                                    <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.fieldLabel}>Expiry Date</Text>
                                             <View style={styles.inputContainer}>
                                                 <TextInput
                                                     style={[styles.inputText, { flex: 1 }]}
-                                                    value={othersPhoneNumber}
-                                                    onChangeText={setOthersPhoneNumber}
-                                                    placeholder="055 482 4425"
-                                                    keyboardType="phone-pad"
+                                                    placeholder="MM/YY"
+                                                    value={cardDetails.expiry}
+                                                    onChangeText={(text) => setCardDetails({ ...cardDetails, expiry: text })}
                                                 />
-                                                <TouchableOpacity>
-                                                    <MaterialCommunityIcons name="contacts" size={24} color={COLORS.textDark} />
-                                                </TouchableOpacity>
                                             </View>
-
-                                            {/* Save Number Checkbox */}
-                                            <TouchableOpacity
-                                                style={styles.checkboxContainer}
-                                                onPress={() => setSaveNumber(!saveNumber)}
-                                            >
-                                                <Ionicons
-                                                    name={saveNumber ? "checkbox" : "square-outline"}
-                                                    size={24}
-                                                    color={saveNumber ? COLORS.primary : COLORS.textGrey}
-                                                />
-                                                <Text style={styles.checkboxLabel}>Save number for future reference</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                )}
-                            </View>
-                        )}
-                    </>
-                )}
-
-                {/* PACKAGE SELECTION STEP (Replaces Amount) */}
-                {step === 'package' && (
-                    <View style={{ marginTop: 10 }}>
-                        <Text style={styles.fieldLabel}>Select Data Bundle</Text>
-                        <Text style={styles.helperLabel}>Choose a package that suits your needs</Text>
-
-                        {DATA_PACKAGES.map((pkg) => {
-                            const isSelected = selectedPackageId === pkg.id;
-                            return (
-                                <TouchableOpacity
-                                    key={pkg.id}
-                                    style={[styles.radioCard, isSelected && styles.radioCardSelected]}
-                                    onPress={() => setSelectedPackageId(pkg.id)}
-                                >
-                                    <View style={[styles.radioCardContent, { flex: 1 }]}>
-                                        <View style={{ marginRight: 12 }}>
-                                            <Ionicons name="wifi" size={24} color={COLORS.textDark} />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <Text style={styles.radioCardLabel}>{pkg.name}</Text>
-                                                <Text style={[styles.radioCardLabel, { color: COLORS.primary }]}>{pkg.volume}</Text>
-                                            </View>
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                                                <Text style={styles.networkText}>{pkg.validity}</Text>
-                                                <Text style={styles.networkText}>GHC {pkg.price}</Text>
+                                            <Text style={styles.fieldLabel}>CVV</Text>
+                                            <View style={styles.inputContainer}>
+                                                <TextInput
+                                                    style={[styles.inputText, { flex: 1 }]}
+                                                    placeholder="123"
+                                                    keyboardType="numeric"
+                                                    maxLength={4}
+                                                    value={cardDetails.cvc}
+                                                    onChangeText={(text) => setCardDetails({ ...cardDetails, cvc: text })}
+                                                />
+                                                <Ionicons name="help-circle-outline" size={24} color={COLORS.textGrey} />
                                             </View>
                                         </View>
                                     </View>
-                                    <View style={[styles.radioOuter, { marginLeft: 12 }]}>
-                                        {isSelected && <View style={styles.radioInner} />}
+
+                                    <Text style={styles.fieldLabel}>Cardholder Name</Text>
+                                    <View style={[styles.inputContainer, { marginBottom: 16 }]}>
+                                        <TextInput
+                                            style={[styles.inputText, { flex: 1 }]}
+                                            placeholder="John Doe"
+                                            value={cardDetails.name}
+                                            onChangeText={(text) => setCardDetails({ ...cardDetails, name: text })}
+                                        />
                                     </View>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                )}
 
-
-                {/* PAYMENT METHOD STEP */}
-                {step === 'payment' && (
-                    <View style={{ marginTop: 10 }}>
-                        <Text style={styles.sectionHeader}>Confirm Purchase</Text>
-
-                        {/* Summary Card */}
-                        <View style={styles.paymentSummaryCard}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                                <View style={styles.paymentIconBox}>
-                                    <Ionicons name="wifi-outline" size={24} color={COLORS.textDark} />
-                                </View>
-                            </View>
-                            <Text style={styles.paymentSummaryLabel}>
-                                Buying Data ({selectedPkg?.volume}) For {recipientType === 'myself' ? 'Self' : 'Other'}
-                            </Text>
-                            <Text style={styles.paymentSummaryNumber}>
-                                {recipientType === 'myself'
-                                    ? MY_NUMBERS.find(n => n.id === selectedNumberId)?.number
-                                    : othersPhoneNumber || 'N/A'}
-                            </Text>
-
-                            {recipientType === 'others' && (
-                                <View style={{ marginTop: 12 }}>
-                                    <Text style={styles.paymentSummaryLabel}>Network</Text>
-                                    <Text style={styles.paymentSummaryNumber}>{selectedNetwork}</Text>
+                                    {/* Save Card Checkbox */}
+                                    <TouchableOpacity
+                                        style={styles.checkboxContainer}
+                                        onPress={() => setSaveCard(!saveCard)}
+                                    >
+                                        <Ionicons
+                                            name={saveCard ? "checkbox" : "square-outline"}
+                                            size={24}
+                                            color={saveCard ? COLORS.primary : COLORS.textGrey}
+                                        />
+                                        <Text style={styles.checkboxLabel}>Save card for future</Text>
+                                    </TouchableOpacity>
                                 </View>
                             )}
+                        </ScrollView>
 
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-                                <View>
-                                    <Text style={styles.paymentSummaryValueLabel}>Amount to Pay</Text>
-                                    <Text style={styles.paymentSummaryValue}>GHC {selectedPkg?.price}</Text>
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* Payment Method Selection */}
-                        <Text style={[styles.sectionHeader, { marginTop: 24 }]}>Payment Method</Text>
-
-                        {/* Render Payment Methods */}
-                        {PAYMENT_METHODS.map((method) => {
-                            const isSelected = paymentMethod === method.id;
-                            return (
-                                <TouchableOpacity
-                                    key={method.id}
-                                    style={[styles.paymentMethodCard, isSelected && styles.paymentMethodSelected, { marginBottom: 12 }]}
-                                    onPress={() => setPaymentMethod(method.id as any)}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <View style={[styles.paymentMethodIcon, { backgroundColor: method.color, alignItems: 'center', justifyContent: 'center' }]}>
-                                            <Ionicons name={method.icon as any} size={14} color={COLORS.white} />
-                                        </View>
-                                        <Text style={styles.paymentMethodText}>{method.name}</Text>
-                                    </View>
-                                    <View style={styles.radioOuter}>
-                                        {isSelected && <View style={styles.radioInner} />}
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        })}
-
-                        {/* Credit Card Specific Flow */}
-                        {paymentMethod === 'card' && (
-                            <View style={{ marginTop: 24 }}>
-                                <Text style={styles.sectionHeader}>Select Card</Text>
-
-                                {savedCards.map((card) => {
-                                    const isSelected = selectedCardId === card.id;
-                                    return (
-                                        <TouchableOpacity
-                                            key={card.id}
-                                            style={[styles.radioCard, isSelected && styles.radioCardSelected]}
-                                            onPress={() => handleSelectCard(card.id)}
-                                        >
-                                            <View style={styles.radioCardContent}>
-                                                <View style={{ marginRight: 12 }}>
-                                                    <Ionicons name="card" size={24} color={COLORS.textDark} />
-                                                </View>
-                                                <View>
-                                                    <Text style={styles.radioCardLabel}>{card.type} **** {card.last4}</Text>
-                                                    <Text style={styles.networkText}>Expires {card.expiry}</Text>
-                                                </View>
-                                            </View>
-                                            <View style={styles.radioOuter}>
-                                                {isSelected && <View style={styles.radioInner} />}
-                                            </View>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-
-                                {/* Add New Card Option */}
-                                <TouchableOpacity
-                                    style={[styles.radioCard, selectedCardId === 'new' && styles.radioCardSelected]}
-                                    onPress={() => handleSelectCard('new')}
-                                >
-                                    <View style={styles.radioCardContent}>
-                                        <View style={{ marginRight: 12 }}>
-                                            <Ionicons name="add-circle-outline" size={32} color={COLORS.textDark} />
-                                        </View>
-                                        <Text style={styles.radioCardLabel}>Add New Card</Text>
-                                    </View>
-                                    <View style={styles.radioOuter}>
-                                        {selectedCardId === 'new' && <View style={styles.radioInner} />}
-                                    </View>
-                                </TouchableOpacity>
-
-                                {selectedCardId === 'new' && (
-                                    <View style={{ marginTop: 20, marginLeft: 8, borderLeftWidth: 2, borderLeftColor: '#E2E8F0', paddingLeft: 16 }}>
-                                        <Text style={styles.fieldLabel}>Card Number</Text>
-                                        <View style={[styles.inputContainer, { marginBottom: 16 }]}>
-                                            <TextInput
-                                                style={[styles.inputText, { flex: 1 }]}
-                                                placeholder="0000 0000 0000 0000"
-                                                keyboardType="numeric"
-                                                value={cardDetails.number}
-                                                onChangeText={(text) => setCardDetails({ ...cardDetails, number: text })}
-                                            />
-                                            <Ionicons name="card-outline" size={24} color={COLORS.textGrey} />
-                                        </View>
-
-                                        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.fieldLabel}>Expiry Date</Text>
-                                                <View style={styles.inputContainer}>
-                                                    <TextInput
-                                                        style={[styles.inputText, { flex: 1 }]}
-                                                        placeholder="MM/YY"
-                                                        value={cardDetails.expiry}
-                                                        onChangeText={(text) => setCardDetails({ ...cardDetails, expiry: text })}
-                                                    />
-                                                </View>
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.fieldLabel}>CVV</Text>
-                                                <View style={styles.inputContainer}>
-                                                    <TextInput
-                                                        style={[styles.inputText, { flex: 1 }]}
-                                                        placeholder="123"
-                                                        keyboardType="numeric"
-                                                        maxLength={4}
-                                                        value={cardDetails.cvc}
-                                                        onChangeText={(text) => setCardDetails({ ...cardDetails, cvc: text })}
-                                                    />
-                                                    <Ionicons name="help-circle-outline" size={24} color={COLORS.textGrey} />
-                                                </View>
-                                            </View>
-                                        </View>
-
-                                        <Text style={styles.fieldLabel}>Cardholder Name</Text>
-                                        <View style={styles.inputContainer}>
-                                            <TextInput
-                                                style={[styles.inputText, { flex: 1 }]}
-                                                placeholder="John Doe"
-                                                value={cardDetails.name}
-                                                onChangeText={(text) => setCardDetails({ ...cardDetails, name: text })}
-                                            />
-                                        </View>
-
-                                        {/* Save Card Checkbox */}
-                                        <TouchableOpacity
-                                            style={styles.checkboxContainer}
-                                            onPress={() => setSaveCard(!saveCard)}
-                                        >
-                                            <Ionicons
-                                                name={saveCard ? "checkbox" : "square-outline"}
-                                                size={24}
-                                                color={saveCard ? COLORS.primary : COLORS.textGrey}
-                                            />
-                                            <Text style={styles.checkboxLabel}>Save card for future</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
-                            </View>
-                        )}
-                    </View>
-                )}
-
-
-                {/* CONFIRMATION STEP */}
-                {step === 'confirm' && (
-                    <View style={{ marginTop: 10 }}>
-                        <Text style={styles.sectionHeader}>Confirm Details</Text>
-
-                        <View style={styles.detailsContainer}>
-                            {/* Package */}
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Package</Text>
-                                <Text style={styles.detailValue}>{selectedPkg?.name}</Text>
-                            </View>
-                            {/* Volume */}
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Volume</Text>
-                                <Text style={styles.detailValue}>{selectedPkg?.volume}</Text>
-                            </View>
-
-                            {/* Amount */}
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Price</Text>
-                                <Text style={styles.detailValue}>GHC {selectedPkg?.price}</Text>
-                            </View>
-
-                            {/* Recipient Number */}
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Recipient Number</Text>
-                                <Text style={styles.detailValue}>
-                                    {recipientType === 'myself'
-                                        ? MY_NUMBERS.find(n => n.id === selectedNumberId)?.number
-                                        : othersPhoneNumber || 'N/A'}
-                                </Text>
-                            </View>
-
-                            {/* Payment Method */}
-                            <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-                                <Text style={styles.detailLabel}>Payment Method</Text>
-                                <Text style={styles.detailValue}>
-                                    {PAYMENT_METHODS.find(m => m.id === paymentMethod)?.name}
-                                </Text>
-                            </View>
-                        </View>
-
-                        {/* Transaction Notice */}
-                        <View style={styles.noticeCard}>
-                            <View style={styles.noticeIconCircle} />
-                            <Text style={styles.noticeTitle}>Transaction Notice</Text>
-                            <Text style={styles.noticeText}>Transactions are final and cannot be reversed.</Text>
+                        {/* Confirm Button */}
+                        <View style={styles.bottomSheetFooter}>
+                            <TouchableOpacity style={styles.continueButton} onPress={() => setShowCardBottomSheet(false)}>
+                                <Text style={styles.continueText}>Confirm</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
-                )}
+                </View>
+            </Modal>
 
-            </ScrollView>
+            {/* PIN Entry Bottom Sheet */}
+            <PinEntryBottomSheet
+                visible={showPinSheet}
+                onClose={() => setShowPinSheet(false)}
+                onVerify={handlePinVerify}
+            />
 
-            {/* Bottom Button */}
-            <View style={styles.footer}>
-                <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-                    <Text style={styles.continueText}>
-                        {step === 'confirm' ? 'Pay' : step === 'payment' ? 'Proceed To Payment' : 'Continue'}
-                    </Text>
-                </TouchableOpacity>
-            </View>
+            {/* OTP Entry Bottom Sheet */}
+            <OtpEntryBottomSheet
+                visible={showOtpSheet}
+                onClose={() => setShowOtpSheet(false)}
+                onVerify={handleOtpVerify}
+                phoneNumber={recipientType === 'myself' ? MY_NUMBERS.find(n => n.id === selectedNumberId)?.number : othersPhoneNumber}
+            />
 
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: COLORS.background,
-    },
-    header: {
-        paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: 20,
-    },
-    backButton: {
-        alignSelf: 'flex-start',
-        marginLeft: -4,
-        marginBottom: 10,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: COLORS.textDark,
-        marginBottom: 4,
-    },
-    subtitle: {
-        fontSize: 14,
-        color: COLORS.textGrey,
-    },
-    scrollContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 100,
-    },
+    container: { flex: 1, backgroundColor: COLORS.background },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 14 },
+    backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', ...SHADOWS.sm },
+    title: { fontSize: 20, fontWeight: '800', color: COLORS.textDark },
+    subtitle: { fontSize: 13, color: COLORS.textGrey },
+    scrollContent: { paddingHorizontal: 20, paddingBottom: 110 },
 
-    // Use same styles as Exchange flows for consistency
-    sectionHeader: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: COLORS.textDark,
-        marginBottom: 12,
-    },
+    sectionHeader: { fontSize: 13, fontWeight: '700', color: COLORS.textGrey, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+
     radioCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#F8FAFC',
-        borderWidth: 2,
-        borderColor: '#64748B',
-        borderRadius: 4,
-        padding: 16,
-        marginBottom: 12,
-    },
-    radioCardSelected: {
-        borderColor: '#1E293B',
-        borderWidth: 2.5,
-    },
-    radioCardContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    radioIconCircle: {
-        marginRight: 12,
-    },
-    radioCardLabel: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: COLORS.textDark,
-    },
-    radioOuter: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#000',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    radioInner: {
-        width: 14,
-        height: 14,
-        borderRadius: 7,
-        backgroundColor: '#000',
-    },
-    phoneText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: COLORS.textDark,
-    },
-    networkText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: COLORS.textGrey,
-        textTransform: 'uppercase',
-    },
-    footer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: COLORS.background,
-        padding: 20,
-        borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
-    },
-    continueButton: {
-        backgroundColor: '#475569',
-        paddingVertical: 18,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    continueText: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: '600',
-    },
-    dropdownSelector: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 8,
-        padding: 16,
         backgroundColor: COLORS.white,
+        borderRadius: 16, padding: 16,
+        flexDirection: 'row', alignItems: 'center', gap: 14,
+        marginBottom: 12, borderWidth: 1.5, borderColor: 'transparent',
+        ...SHADOWS.sm,
     },
-    networkIconCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#64748B',
-        marginRight: 12,
-    },
-    dropdownText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: COLORS.textDark,
-    },
-    fieldLabel: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: COLORS.textDark,
-        marginBottom: 8,
-    },
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 8,
-        padding: 16,
-        backgroundColor: COLORS.white,
-    },
-    inputText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.textDark,
-    },
-    dropdownList: {
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 8,
-        backgroundColor: COLORS.white,
-        marginTop: 8,
-        overflow: 'hidden',
-    },
-    dropdownOption: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
-    },
-    dropdownOptionText: {
-        fontSize: 14,
-        color: COLORS.textDark,
-        fontWeight: '500',
-    },
-    helperLabel: {
-        fontSize: 12,
-        color: COLORS.textGrey,
-        marginBottom: 8,
-    },
-    paymentSummaryCard: {
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 4,
-        padding: 16,
-    },
-    paymentIconBox: {
-        backgroundColor: '#E0F2FE', // Light blue
-        padding: 8,
-        borderRadius: 4,
-        alignSelf: 'flex-start',
-    },
-    paymentSummaryLabel: {
-        fontSize: 12,
-        color: '#64748B',
-        marginBottom: 4,
-    },
-    paymentSummaryNumber: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: COLORS.textDark,
-    },
-    paymentSummaryValueLabel: {
-        fontSize: 12,
-        color: '#64748B',
-        marginBottom: 2,
-    },
-    paymentSummaryValue: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: COLORS.textDark,
-    },
-    paymentMethodCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: COLORS.white,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 4,
-        padding: 16,
-    },
-    paymentMethodSelected: {
-        backgroundColor: '#F8FAFC',
-        borderColor: '#E2E8F0',
-    },
-    paymentMethodIcon: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        marginRight: 12,
-    },
-    paymentMethodText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.textDark,
-    },
-    detailsContainer: {
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 4,
-        marginBottom: 24,
-    },
-    detailRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
-        alignItems: 'center',
-    },
-    detailLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#94A3B8',
-        flex: 1,
-    },
-    detailValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: COLORS.textDark,
-        textAlign: 'right',
-        flex: 1,
-    },
-    noticeCard: {
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 4,
-        padding: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    noticeIconCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#CBD5E1',
-        marginBottom: 12,
-    },
-    noticeTitle: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#64748B',
-        marginBottom: 4,
-    },
-    noticeText: {
-        fontSize: 12,
-        color: COLORS.textDark,
-    },
+    radioCardSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+    radioCardContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    radioIconCircle: { marginRight: 12 },
+    radioCardLabel: { fontSize: 15, fontWeight: '700', color: COLORS.textDark },
+    radioOuter: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
+    radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.primary },
+    phoneText: { fontSize: 15, fontWeight: '700', color: COLORS.textDark },
+    networkText: { fontSize: 12, fontWeight: '600', color: COLORS.textGrey },
 
-    checkboxContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 12,
+    footer: {
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        backgroundColor: COLORS.white, padding: 20, paddingBottom: 32,
+        borderTopLeftRadius: 20, borderTopRightRadius: 20, ...SHADOWS.lg,
     },
-    checkboxLabel: {
-        marginLeft: 8,
-        fontSize: 14,
-        color: COLORS.textDark,
-    },
+    continueButton: { borderRadius: 16, overflow: 'hidden', ...SHADOWS.primary },
+    continueGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18 },
+    continueText: { color: COLORS.white, fontSize: 17, fontWeight: '700' },
+
+    dropdownSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, padding: 16, backgroundColor: COLORS.white, ...SHADOWS.sm },
+    networkIconCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.mtn, marginRight: 12 },
+    dropdownText: { flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.textDark },
+    fieldLabel: { fontSize: 13, fontWeight: '700', color: COLORS.textGrey, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+    inputContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, padding: 16, backgroundColor: COLORS.white, ...SHADOWS.sm },
+    inputText: { fontSize: 16, fontWeight: '500', color: COLORS.textDark },
+    dropdownList: { borderRadius: 14, backgroundColor: COLORS.white, marginTop: 4, overflow: 'hidden', ...SHADOWS.md },
+    dropdownOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+    dropdownOptionText: { fontSize: 15, color: COLORS.textDark, fontWeight: '600' },
+    helperLabel: { fontSize: 12, color: COLORS.textGrey, marginBottom: 8 },
+
+    paymentSummaryCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 20, marginBottom: 20, ...SHADOWS.sm },
+    paymentIconBox: { backgroundColor: COLORS.primaryLight, padding: 10, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 12 },
+    paymentSummaryLabel: { fontSize: 12, color: COLORS.textGrey, marginBottom: 4 },
+    paymentSummaryNumber: { fontSize: 18, fontWeight: '800', color: COLORS.textDark },
+    paymentSummaryValueLabel: { fontSize: 12, color: COLORS.textGrey, marginBottom: 2 },
+    paymentSummaryValue: { fontSize: 18, fontWeight: '800', color: COLORS.textDark },
+    paymentMethodCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.white, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: 'transparent', ...SHADOWS.sm },
+    paymentMethodSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+    paymentMethodIcon: { width: 36, height: 36, borderRadius: 18, marginRight: 12, alignItems: 'center', justifyContent: 'center' },
+    paymentMethodText: { fontSize: 15, fontWeight: '700', color: COLORS.textDark },
+
+    detailsContainer: { backgroundColor: COLORS.white, borderRadius: 20, marginBottom: 16, overflow: 'hidden', ...SHADOWS.sm },
+    detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border, alignItems: 'center' },
+    detailLabel: { fontSize: 13, fontWeight: '500', color: COLORS.textGrey, flex: 1 },
+    detailValue: { fontSize: 14, fontWeight: '700', color: COLORS.textDark, textAlign: 'right', flex: 1.5 },
+    noticeCard: { backgroundColor: '#EFF6FF', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 16 },
+    noticeIconCircle: { marginTop: 1 },
+    noticeTitle: { fontSize: 13, fontWeight: '700', color: COLORS.primary, marginBottom: 3 },
+    noticeText: { fontSize: 12, color: COLORS.textMid, lineHeight: 18, flex: 1 },
+
+    checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
+    checkboxLabel: { fontSize: 14, color: COLORS.textMid, flex: 1 },
+
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    bottomSheetContainer: { backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%', paddingTop: 8 },
+    bottomSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+    bottomSheetTitle: { fontSize: 18, fontWeight: '800', color: COLORS.textDark },
+    bottomSheetContent: { padding: 20, maxHeight: '70%' },
+    bottomSheetFooter: { padding: 20, borderTopWidth: 1, borderTopColor: COLORS.border },
+    balanceSection: { backgroundColor: COLORS.primaryLight, borderRadius: 20, padding: 20, alignItems: 'center', marginBottom: 24 },
 });
