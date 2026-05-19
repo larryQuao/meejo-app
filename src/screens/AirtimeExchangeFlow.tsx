@@ -1,158 +1,177 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, StatusBar as RNStatusBar, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS } from '../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, SHADOWS } from '../constants/theme';
+import TransactionSuccessState from '../components/TransactionSuccessState';
+import TransactionErrorState from '../components/TransactionErrorState';
 
-// Mock Data for "Your Numbers"
 const MY_NUMBERS = [
     { id: '1', number: '+233 33 333 3333', network: 'MTN' },
     { id: '2', number: '+233 44 444 4444', network: 'TELECEL' },
 ];
 
-export default function AirtimeExchangeFlow({ onDone }: { onDone: () => void }) {
+const STEPS = ['Recipient', 'Amount', 'Payment', 'Confirm'];
+type Step = 'recipient' | 'amount' | 'payment' | 'confirm' | 'processing' | 'success' | 'error';
+
+const stepIndex: Record<string, number> = { recipient: 0, amount: 1, payment: 2, confirm: 3 };
+
+export default function AirtimeExchangeFlow({ onDone, onPurchaseAirtime }: { onDone: () => void; onPurchaseAirtime?: () => void }) {
     const [recipientType, setRecipientType] = useState<'myself' | 'others'>('myself');
     const [selectedNumberId, setSelectedNumberId] = useState<string>(MY_NUMBERS[0].id);
-
-    // Dropdown State
     const [isNetworkDropdownOpen, setIsNetworkDropdownOpen] = useState(false);
     const [selectedNetwork, setSelectedNetwork] = useState('MTN');
     const NETWORKS = ['MTN', 'Telecel', 'AT'];
-
-    // Flow State
-    const [step, setStep] = useState<'recipient' | 'amount' | 'payment' | 'confirm'>('recipient');
-
-    // Amount State
-    const [amount, setAmount] = useState('10'); // Default 10 as per wireframe
+    const [step, setStep] = useState<Step>('recipient');
+    const [errorMsg, setErrorMsg] = useState('');
+    const [amount, setAmount] = useState('10');
     const PRESET_AMOUNTS = ['10', '20', '30', '50'];
     const [othersPhoneNumber, setOthersPhoneNumber] = useState('');
-
-    // Payment State
     const [paymentMethod, setPaymentMethod] = useState<'momo' | 'airtime'>('airtime');
+    const dataAmount = (parseFloat(amount) || 0) * 14.5;
 
-    // Derived Data
-    const dataAmount = (parseFloat(amount) || 0) * 14.5; // Approx ratio from wireframe (10GHC -> 145MB)
-
-    // Handlers
     const handleContinue = () => {
-        if (step === 'recipient') {
-            setStep('amount');
-        } else if (step === 'amount') {
-            setStep('payment');
-        } else if (step === 'payment') {
-            setStep('confirm');
-        } else {
-            onDone(); // Exit after final confirmation
-        }
+        if (step === 'recipient') setStep('amount');
+        else if (step === 'amount') setStep('payment');
+        else if (step === 'payment') setStep('confirm');
+        else if (step === 'confirm') {
+            setStep('processing');
+            setTimeout(() => setStep('success'), 2000);
+        } else onDone();
     };
 
     const handleBack = () => {
-        if (step === 'confirm') {
-            setStep('payment');
-        } else if (step === 'payment') {
-            setStep('amount');
-        } else if (step === 'amount') {
-            setStep('recipient');
-        } else {
-            onDone(); // Exit flow
-        }
+        if (step === 'confirm') setStep('payment');
+        else if (step === 'payment') setStep('amount');
+        else if (step === 'amount') setStep('recipient');
+        else onDone();
     };
+
+    if (step === 'success') {
+        return (
+            <TransactionSuccessState
+                message="Exchange Successful!"
+                subMessage={`GHC ${amount} airtime → ${Math.round(dataAmount)} MB data`}
+                onDone={onDone}
+            />
+        );
+    }
+    if (step === 'error') {
+        return <TransactionErrorState message={errorMsg || "Exchange failed. Please try again."} onRetry={() => setStep('confirm')} onClose={onDone} />;
+    }
+    if (step === 'processing') {
+        return (
+            <View style={styles.processingContainer}>
+                <LinearGradient colors={[COLORS.primaryLight, COLORS.background]} style={styles.processingGradient}>
+                    <View style={styles.processingIconWrap}>
+                        <ActivityIndicator size="large" color={COLORS.primary} />
+                    </View>
+                    <Text style={styles.processingTitle}>Processing Exchange</Text>
+                    <Text style={styles.processingSubtitle}>Please wait a moment...</Text>
+                </LinearGradient>
+            </View>
+        );
+    }
+
+    const currentStepIndex = stepIndex[step] ?? 0;
+    const recipient = recipientType === 'myself'
+        ? MY_NUMBERS.find(n => n.id === selectedNumberId)?.number
+        : othersPhoneNumber || 'N/A';
 
     return (
         <View style={styles.container}>
-            {/* Header Area */}
-            {/* Note: The parent screen (ExchangeScreen) usually handles the top header, but the wireframe shows a specific Header Style. 
-                We'll assume this component takes over the content area. 
-                If the back button is needed here, we render it.
-            */}
+            {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back-circle-outline" size={32} color={COLORS.textDark} />
+                <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="arrow-back" size={24} color={COLORS.textDark} />
                 </TouchableOpacity>
-                <View style={{ marginTop: 10 }}>
+                <View style={styles.headerText}>
                     <Text style={styles.title}>Exchange Airtime</Text>
-                    <Text style={styles.subtitle}>
-                        {step === 'amount'
-                            ? `Exchange your airtime to data for ${recipientType === 'myself' ? 'self' : 'others'}`
-                            : 'Exchange your airtime to data'
-                        }
-                    </Text>
+                    <Text style={styles.subtitle}>Swap airtime for data</Text>
                 </View>
+            </View>
+
+            {/* Step Indicator */}
+            <View style={styles.stepRow}>
+                {STEPS.map((label, i) => (
+                    <React.Fragment key={label}>
+                        <View style={styles.stepItem}>
+                            <View style={[styles.stepDot, i <= currentStepIndex && styles.stepDotActive, i < currentStepIndex && styles.stepDotDone]}>
+                                {i < currentStepIndex
+                                    ? <Ionicons name="checkmark" size={12} color={COLORS.white} />
+                                    : <Text style={[styles.stepNum, i <= currentStepIndex && styles.stepNumActive]}>{i + 1}</Text>
+                                }
+                            </View>
+                            <Text style={[styles.stepLabel, i === currentStepIndex && styles.stepLabelActive]}>{label}</Text>
+                        </View>
+                        {i < STEPS.length - 1 && (
+                            <View style={[styles.stepLine, i < currentStepIndex && styles.stepLineActive]} />
+                        )}
+                    </React.Fragment>
+                ))}
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
+                {/* RECIPIENT STEP */}
                 {step === 'recipient' && (
                     <>
-                        {/* Balance Card Section */}
-                        <View style={styles.balanceSection}>
-                            <Text style={styles.balanceLabel}>Airtime</Text>
-                            <Text style={styles.balanceAmount}>GHC 783.00</Text>
-                            <TouchableOpacity style={styles.addUpButton}>
-                                <Text style={styles.addUpText}>Add Up</Text>
+                        {/* Balance card */}
+                        <View style={[styles.balanceCard, SHADOWS.md]}>
+                            <View style={styles.balanceLeft}>
+                                <View style={styles.balanceIconWrap}>
+                                    <Ionicons name="call" size={22} color={COLORS.primary} />
+                                </View>
+                                <View>
+                                    <Text style={styles.balanceLabel}>Airtime Balance</Text>
+                                    <Text style={styles.balanceValue}>GHC 783.00</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity style={styles.addUpBtn} onPress={onPurchaseAirtime}>
+                                <Text style={styles.addUpText}>Top Up</Text>
                             </TouchableOpacity>
                         </View>
 
-                        {/* Recipient Selector Section */}
-                        <Text style={styles.sectionHeader}>Airtime to Data exchange for?</Text>
+                        <Text style={styles.sectionLabel}>Exchange for</Text>
+                        <View style={styles.recipientToggle}>
+                            {(['myself', 'others'] as const).map((type) => (
+                                <TouchableOpacity
+                                    key={type}
+                                    style={[styles.toggleBtn, recipientType === type && styles.toggleBtnActive]}
+                                    onPress={() => setRecipientType(type)}
+                                >
+                                    <Ionicons
+                                        name={type === 'myself' ? 'person' : 'people'}
+                                        size={16}
+                                        color={recipientType === type ? COLORS.white : COLORS.textGrey}
+                                    />
+                                    <Text style={[styles.toggleText, recipientType === type && styles.toggleTextActive]}>
+                                        {type === 'myself' ? 'Myself' : 'Others'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
 
-                        {/* Myself Card */}
-                        <TouchableOpacity
-                            style={[styles.radioCard, recipientType === 'myself' && styles.radioCardSelected]}
-                            onPress={() => setRecipientType('myself')}
-                        >
-                            <View style={styles.radioCardContent}>
-                                <View style={styles.radioIconCircle}>
-                                    <Ionicons name="person" size={24} color={COLORS.textDark} />
-                                </View>
-                                <Text style={styles.radioCardLabel}>Myself</Text>
-                            </View>
-                            <View style={styles.radioOuter}>
-                                {recipientType === 'myself' && <View style={styles.radioInner} />}
-                            </View>
-                        </TouchableOpacity>
-
-                        {/* Others Card */}
-                        <TouchableOpacity
-                            style={[styles.radioCard, recipientType === 'others' && styles.radioCardSelected]}
-                            onPress={() => setRecipientType('others')}
-                        >
-                            <View style={styles.radioCardContent}>
-                                <View style={styles.radioIconCircle}>
-                                    <Ionicons name="person" size={24} color={COLORS.textDark} />
-                                </View>
-                                <Text style={styles.radioCardLabel}>Others</Text>
-                            </View>
-                            <View style={styles.radioOuter}>
-                                {recipientType === 'others' && <View style={styles.radioInner} />}
-                            </View>
-                        </TouchableOpacity>
-
-
-
-                        {/* Number Selection Section (Only if Myself is selected, based on 'Your Number' label) */}
                         {recipientType === 'myself' && (
                             <>
-                                <Text style={[styles.sectionHeader, { marginTop: 24 }]}>Your Number</Text>
-
+                                <Text style={styles.sectionLabel}>Select your number</Text>
                                 {MY_NUMBERS.map((item) => {
                                     const isSelected = selectedNumberId === item.id;
                                     return (
                                         <TouchableOpacity
                                             key={item.id}
-                                            style={[styles.radioCard, isSelected && styles.radioCardSelected]}
+                                            style={[styles.selectCard, isSelected && styles.selectCardActive]}
                                             onPress={() => setSelectedNumberId(item.id)}
                                         >
-                                            <View style={styles.radioCardContent}>
-                                                <View style={{ marginRight: 12 }}>
-                                                    <Ionicons name="call" size={24} color={COLORS.textDark} />
-                                                </View>
-                                                <View>
-                                                    <Text style={styles.phoneText}>{item.number}</Text>
-                                                    <Text style={styles.networkText}>{item.network}</Text>
-                                                </View>
+                                            <View style={[styles.selectIconWrap, { backgroundColor: isSelected ? COLORS.primaryLight : '#F1F5F9' }]}>
+                                                <Ionicons name="call" size={20} color={isSelected ? COLORS.primary : COLORS.textGrey} />
                                             </View>
-                                            <View style={styles.radioOuter}>
-                                                {isSelected && <View style={styles.radioInner} />}
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.selectCardTitle}>{item.number}</Text>
+                                                <Text style={styles.selectCardSub}>{item.network}</Text>
+                                            </View>
+                                            <View style={[styles.checkCircle, isSelected && styles.checkCircleActive]}>
+                                                {isSelected && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
                                             </View>
                                         </TouchableOpacity>
                                     );
@@ -160,644 +179,469 @@ export default function AirtimeExchangeFlow({ onDone }: { onDone: () => void }) 
                             </>
                         )}
 
-                        {/* Others Selection Flow */}
                         {recipientType === 'others' && (
-                            <View style={{ marginTop: 24 }}>
-                                <Text style={styles.sectionHeader}>Choose networks</Text>
-
+                            <>
+                                <Text style={styles.sectionLabel}>Choose network</Text>
                                 <TouchableOpacity
-                                    style={styles.dropdownSelector}
+                                    style={styles.dropdownBtn}
                                     onPress={() => setIsNetworkDropdownOpen(!isNetworkDropdownOpen)}
                                 >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <View style={styles.networkIconCircle} />
-                                        <Text style={styles.dropdownText}>{selectedNetwork}</Text>
-                                    </View>
-                                    <Ionicons name={isNetworkDropdownOpen ? "chevron-up" : "chevron-down"} size={24} color={COLORS.textDark} />
+                                    <View style={styles.networkDot} />
+                                    <Text style={styles.dropdownText}>{selectedNetwork}</Text>
+                                    <Ionicons name={isNetworkDropdownOpen ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textGrey} />
                                 </TouchableOpacity>
-
-                                {/* Dropdown Options */}
                                 {isNetworkDropdownOpen && (
-                                    <View style={styles.dropdownList}>
-                                        {NETWORKS.map((network) => (
+                                    <View style={[styles.dropdownList, SHADOWS.md]}>
+                                        {NETWORKS.map((net) => (
                                             <TouchableOpacity
-                                                key={network}
+                                                key={net}
                                                 style={styles.dropdownOption}
-                                                onPress={() => {
-                                                    setSelectedNetwork(network);
-                                                    setIsNetworkDropdownOpen(false);
-                                                }}
+                                                onPress={() => { setSelectedNetwork(net); setIsNetworkDropdownOpen(false); }}
                                             >
-                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                    {/* Placeholder icon for now */}
-                                                    <View style={[styles.networkIconCircle, { width: 24, height: 24, borderRadius: 12, marginRight: 8 }]} />
-                                                    <Text style={styles.dropdownOptionText}>{network}</Text>
-                                                </View>
-                                                {selectedNetwork === network && (
-                                                    <Ionicons name="checkmark" size={20} color={COLORS.primary} />
-                                                )}
+                                                <Text style={styles.dropdownOptionText}>{net}</Text>
+                                                {selectedNetwork === net && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
                                             </TouchableOpacity>
                                         ))}
                                     </View>
                                 )}
 
-                                <View style={{ marginTop: 20 }}>
-                                    <Text style={styles.fieldLabel}>Enter phone number</Text>
-                                    <View style={styles.inputContainer}>
-                                        <TextInput
-                                            style={[styles.inputText, { flex: 1 }]}
-                                            value={othersPhoneNumber}
-                                            onChangeText={setOthersPhoneNumber}
-                                            placeholder="055 482 4425"
-                                            keyboardType="phone-pad"
-                                        />
-                                        <TouchableOpacity>
-                                            <MaterialCommunityIcons name="contacts" size={24} color={COLORS.textDark} />
-                                        </TouchableOpacity>
-                                    </View>
+                                <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Phone number</Text>
+                                <View style={styles.inputRow}>
+                                    <TextInput
+                                        style={[styles.input, { flex: 1 }]}
+                                        value={othersPhoneNumber}
+                                        onChangeText={setOthersPhoneNumber}
+                                        placeholder="055 482 4425"
+                                        placeholderTextColor={COLORS.textLight}
+                                        keyboardType="phone-pad"
+                                    />
+                                    <TouchableOpacity style={styles.inputAction}>
+                                        <MaterialCommunityIcons name="contacts" size={22} color={COLORS.primary} />
+                                    </TouchableOpacity>
                                 </View>
-                            </View>
+                            </>
                         )}
                     </>
                 )}
 
-                {/* AMOUNT ENTRY STEP  */}
+                {/* AMOUNT STEP */}
                 {step === 'amount' && (
-                    <View style={{ marginTop: 10 }}>
-                        <Text style={styles.fieldLabel}>Enter Amount of Airtime (GHC) Exchange to data</Text>
-                        <Text style={styles.helperLabel}>Minimum amount: GHC 5.00</Text>
-
-                        <View style={styles.amountInputContainer}>
-                            <TextInput
-                                style={styles.amountInput}
-                                value={amount}
-                                onChangeText={setAmount}
-                                keyboardType="numeric"
-                                placeholder="0"
-                            />
+                    <>
+                        <View style={styles.amountCard}>
+                            <Text style={styles.amountHint}>Airtime amount (GHC)</Text>
+                            <View style={styles.amountInputRow}>
+                                <Text style={styles.currencySymbol}>GHC</Text>
+                                <TextInput
+                                    style={styles.amountInput}
+                                    value={amount}
+                                    onChangeText={setAmount}
+                                    keyboardType="numeric"
+                                    placeholder="0"
+                                    placeholderTextColor={COLORS.textLight}
+                                />
+                            </View>
+                            <Text style={styles.amountMinHint}>Minimum: GHC 5.00</Text>
                         </View>
 
-                        {/* Quick Amounts */}
                         <View style={styles.chipsRow}>
                             {PRESET_AMOUNTS.map((val) => (
                                 <TouchableOpacity
                                     key={val}
-                                    style={[styles.chip, amount === val && styles.chipSelected]}
+                                    style={[styles.chip, amount === val && styles.chipActive]}
                                     onPress={() => setAmount(val)}
                                 >
-                                    <Text style={[styles.chipText, amount === val && styles.chipTextSelected]}>
-                                        GHC {val}
-                                    </Text>
+                                    <Text style={[styles.chipText, amount === val && styles.chipTextActive]}>GHC {val}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
 
-                        {/* Summary */}
-                        <View style={styles.summaryRow}>
-                            <View>
-                                <Text style={styles.summaryLabel}>Airtime Exchange amount</Text>
-                                <Text style={styles.summaryValue}>GHC {amount || '0'}</Text>
+                        <View style={[styles.conversionCard, SHADOWS.sm]}>
+                            <View style={styles.conversionItem}>
+                                <Text style={styles.conversionLabel}>You exchange</Text>
+                                <Text style={styles.conversionValue}>GHC {amount || '0'}</Text>
                             </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={styles.summaryLabel}>Data Exchange Amount</Text>
-                                <Text style={styles.summaryValue}>{Math.round(dataAmount)}MB</Text>
+                            <View style={styles.conversionArrow}>
+                                <Ionicons name="swap-horizontal" size={22} color={COLORS.primary} />
+                            </View>
+                            <View style={[styles.conversionItem, { alignItems: 'flex-end' }]}>
+                                <Text style={styles.conversionLabel}>You get</Text>
+                                <Text style={[styles.conversionValue, { color: COLORS.success }]}>{Math.round(dataAmount)} MB</Text>
                             </View>
                         </View>
-                    </View>
+                    </>
                 )}
 
-
-                {/* PAYMENT METHOD STEP */}
+                {/* PAYMENT STEP */}
                 {step === 'payment' && (
-                    <View style={{ marginTop: 10 }}>
-                        <Text style={styles.sectionHeader}>Confirm Airtime Exchange</Text>
-
-                        {/* Summary Card */}
-                        <View style={styles.paymentSummaryCard}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                                <View style={styles.paymentIconBox}>
-                                    <MaterialCommunityIcons name="phone-rotate-landscape" size={24} color={COLORS.textDark} />
-                                </View>
+                    <>
+                        <View style={[styles.summaryCard, SHADOWS.sm]}>
+                            <Text style={styles.summaryHeader}>Exchange Summary</Text>
+                            <View style={styles.summaryRow}>
+                                <Text style={styles.summaryLabel}>For</Text>
+                                <Text style={styles.summaryValue}>{recipientType === 'myself' ? 'Myself' : 'Others'}</Text>
                             </View>
-                            <Text style={styles.paymentSummaryLabel}>
-                                Airtime to Data Exchange For {recipientType === 'myself' ? 'Self' : 'Other'}
-                            </Text>
-                            <Text style={styles.paymentSummaryNumber}>
-                                {recipientType === 'myself'
-                                    ? MY_NUMBERS.find(n => n.id === selectedNumberId)?.number
-                                    : othersPhoneNumber || 'N/A'}
-                            </Text>
-
+                            <View style={styles.summaryRow}>
+                                <Text style={styles.summaryLabel}>Number</Text>
+                                <Text style={styles.summaryValue}>{recipient}</Text>
+                            </View>
                             {recipientType === 'others' && (
-                                <>
-                                    <View style={{ marginTop: 12 }}>
-                                        <Text style={styles.paymentSummaryLabel}>Network</Text>
-                                        <Text style={styles.paymentSummaryNumber}>{selectedNetwork}</Text>
-                                    </View>
-                                    <View style={{ marginTop: 12 }}>
-                                        <Text style={styles.paymentSummaryLabel}>Charges Involved</Text>
-                                        <Text style={styles.paymentSummaryNumber}>0.5%</Text>
-                                    </View>
-                                </>
+                                <View style={styles.summaryRow}>
+                                    <Text style={styles.summaryLabel}>Network</Text>
+                                    <Text style={styles.summaryValue}>{selectedNetwork}</Text>
+                                </View>
                             )}
-
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-                                <View>
-                                    <Text style={styles.paymentSummaryValueLabel}>Airtime</Text>
-                                    <Text style={styles.paymentSummaryValue}>GHC {amount}</Text>
-                                </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={styles.paymentSummaryValueLabel}>Data</Text>
-                                    <Text style={styles.paymentSummaryValue}>{Math.round(dataAmount)}MB</Text>
-                                </View>
+                            <View style={[styles.summaryDivider]} />
+                            <View style={styles.summaryRow}>
+                                <Text style={styles.summaryLabel}>Airtime</Text>
+                                <Text style={styles.summaryValue}>GHC {amount}</Text>
+                            </View>
+                            <View style={styles.summaryRow}>
+                                <Text style={styles.summaryLabel}>Data Value</Text>
+                                <Text style={[styles.summaryValue, { color: COLORS.success }]}>{Math.round(dataAmount)} MB</Text>
                             </View>
                         </View>
 
-                        {/* Payment Method Selection */}
-                        <Text style={[styles.sectionHeader, { marginTop: 24 }]}>Choose Payment Method</Text>
-
-                        {/* Momo Option (Mock Dropdown) */}
-                        <TouchableOpacity style={[styles.paymentMethodCard, { marginBottom: 12 }]}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <View style={[styles.paymentMethodIcon, { backgroundColor: '#64748B' }]} />
-                                <Text style={styles.paymentMethodText}>MTN Momo</Text>
-                            </View>
-                            <Ionicons name="chevron-down" size={24} color={COLORS.textDark} />
-                        </TouchableOpacity>
-
-                        {/* Airtime Option (Selected) */}
-                        <TouchableOpacity
-                            style={[styles.paymentMethodCard, styles.paymentMethodSelected]}
-                            onPress={() => setPaymentMethod('airtime')}
-                        >
-                            <Text style={styles.paymentMethodText}>Airtime</Text>
-                            <View style={styles.radioOuter}>
-                                <View style={styles.radioInner} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
+                        <Text style={styles.sectionLabel}>Payment Method</Text>
+                        {[
+                            { id: 'airtime', label: 'Airtime Balance', sub: 'GHC 783.00 available', iconBg: COLORS.primaryLight, iconColor: COLORS.primary, icon: 'call-outline' },
+                            { id: 'momo', label: 'MTN Mobile Money', sub: MY_NUMBERS.find(n => n.network === 'MTN')?.number, iconBg: '#FFF9C4', iconColor: '#D97706', icon: 'phone-portrait-outline' },
+                        ].map((method) => {
+                            const isSelected = paymentMethod === method.id as any;
+                            return (
+                                <TouchableOpacity
+                                    key={method.id}
+                                    style={[styles.selectCard, isSelected && styles.selectCardActive]}
+                                    onPress={() => setPaymentMethod(method.id as any)}
+                                >
+                                    <View style={[styles.selectIconWrap, { backgroundColor: isSelected ? COLORS.primaryLight : '#F1F5F9' }]}>
+                                        <Ionicons name={method.icon as any} size={20} color={isSelected ? COLORS.primary : COLORS.textGrey} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.selectCardTitle}>{method.label}</Text>
+                                        {method.sub && <Text style={styles.selectCardSub}>{method.sub}</Text>}
+                                    </View>
+                                    <View style={[styles.checkCircle, isSelected && styles.checkCircleActive]}>
+                                        {isSelected && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </>
                 )}
 
-
-
-
-                {/* CONFIRMATION STEP */}
+                {/* CONFIRM STEP */}
                 {step === 'confirm' && (
-                    <View style={{ marginTop: 10 }}>
-                        <Text style={styles.sectionHeader}>Confirm Transaction Details</Text>
-
-                        <View style={styles.detailsContainer}>
-                            {/* Airtime Amount */}
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Airtime Amount</Text>
-                                <Text style={styles.detailValue}>GHC {amount}</Text>
+                    <>
+                        <View style={[styles.receiptCard, SHADOWS.md]}>
+                            <View style={styles.receiptHeader}>
+                                <View style={styles.receiptIconWrap}>
+                                    <Ionicons name="swap-horizontal" size={24} color={COLORS.primary} />
+                                </View>
+                                <Text style={styles.receiptTitle}>Airtime Exchange</Text>
                             </View>
-
-                            {/* Exchange Amount */}
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Exchange to Data Amount</Text>
-                                <Text style={styles.detailValue}>{Math.round(dataAmount)}MB</Text>
-                            </View>
-
-                            {/* Recipient Number */}
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Reciepient Number ({recipientType === 'myself' ? 'Self' : 'Other'})</Text>
-                                <Text style={styles.detailValue}>
-                                    {recipientType === 'myself'
-                                        ? MY_NUMBERS.find(n => n.id === selectedNumberId)?.number
-                                        : othersPhoneNumber || 'N/A'}
-                                </Text>
-                            </View>
-
-                            {/* Payment Method */}
-                            <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-                                <Text style={styles.detailLabel}>Payment Method</Text>
-                                <Text style={styles.detailValue}>Airtime</Text>
-                            </View>
+                            {[
+                                { label: 'Airtime Amount', value: `GHC ${amount}` },
+                                { label: 'Data You Receive', value: `${Math.round(dataAmount)} MB` },
+                                { label: 'Recipient', value: `${recipient} (${recipientType === 'myself' ? 'Self' : 'Other'})` },
+                                { label: 'Payment Method', value: paymentMethod === 'momo' ? 'MTN MoMo' : 'Airtime Balance' },
+                            ].map((row, i, arr) => (
+                                <View key={row.label} style={[styles.receiptRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
+                                    <Text style={styles.receiptLabel}>{row.label}</Text>
+                                    <Text style={styles.receiptValue}>{row.value}</Text>
+                                </View>
+                            ))}
                         </View>
 
-                        {/* Transaction Notice */}
                         <View style={styles.noticeCard}>
-                            <View style={styles.noticeIconCircle} />
-                            <Text style={styles.noticeTitle}>Transaction Notice</Text>
-                            <Text style={styles.noticeText}>Note that transactions made is not reversible.</Text>
+                            <View style={styles.noticeIconWrap}>
+                                <Ionicons name="information-circle" size={22} color={COLORS.primary} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.noticeTitle}>Please Note</Text>
+                                <Text style={styles.noticeText}>This transaction is final and cannot be reversed once confirmed.</Text>
+                            </View>
                         </View>
-                    </View>
+                    </>
                 )}
 
             </ScrollView>
 
-            {/* Bottom Button */}
-            <View style={styles.footer}>
-                <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-                    <Text style={styles.continueText}>
-                        {step === 'confirm' ? 'Pay' : step === 'payment' ? 'Proceed To Payment' : 'Continue'}
-                    </Text>
+            {/* Footer */}
+            <View style={[styles.footer, SHADOWS.lg]}>
+                <TouchableOpacity style={styles.continueBtn} onPress={handleContinue} activeOpacity={0.85}>
+                    <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.continueBtnGradient}>
+                        <Text style={styles.continueBtnText}>
+                            {step === 'confirm' ? 'Confirm & Exchange' : step === 'payment' ? 'Proceed to Confirm' : 'Continue'}
+                        </Text>
+                        <Ionicons name="arrow-forward" size={18} color={COLORS.white} style={{ marginLeft: 8 }} />
+                    </LinearGradient>
                 </TouchableOpacity>
             </View>
-
-
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: COLORS.background, // Assuming white or light grey
-    },
-    header: {
-        paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: 20,
-    },
-    backButton: {
-        alignSelf: 'flex-start',
-        marginLeft: -4, // Align visual circle
-        marginBottom: 10,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: COLORS.textDark,
-        marginBottom: 4,
-    },
-    subtitle: {
-        fontSize: 14,
-        color: COLORS.textGrey,
-    },
-    scrollContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 100,
-    },
+    container: { flex: 1, backgroundColor: COLORS.background },
 
-    // Balance Section
-    balanceSection: {
-        backgroundColor: '#F8FAFC', // Very light grey/white
-        borderWidth: 2,
-        borderColor: '#475569', // Dark grey border as per image
-        borderRadius: 4, // Sharp corners in mockup? Looks slightly rounded. 
-        paddingVertical: 24,
-        alignItems: 'center',
-        marginBottom: 32,
-        marginTop: 10,
-    },
-    balanceLabel: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.textDark,
-        marginBottom: 4,
-    },
-    balanceAmount: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: COLORS.textDark,
-        marginBottom: 12,
-    },
-    addUpButton: {
-        backgroundColor: '#94A3B8', // Greyish button
-        paddingVertical: 6,
-        paddingHorizontal: 16,
-        borderRadius: 4,
-    },
-    addUpText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#1E293B',
-    },
-
-    // Section Headers
-    sectionHeader: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: COLORS.textDark,
-        marginBottom: 12,
-    },
-
-    // Radio Cards
-    radioCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#F8FAFC',
-        borderWidth: 2,
-        borderColor: '#64748B', // Default solid grey border
-        borderRadius: 4,
-        padding: 16,
-        marginBottom: 12,
-    },
-    radioCardSelected: {
-        borderColor: '#1E293B', // Darker when selected? Or same.
-        // Image shows uniform bold borders.
-        borderWidth: 2.5,
-    },
-    radioCardContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    radioIconCircle: {
-        marginRight: 12,
-    },
-    radioCardLabel: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: COLORS.textDark,
-    },
-
-    // Custom Radio Button
-    radioOuter: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#000',
+    processingContainer: { flex: 1 },
+    processingGradient: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+    processingIconWrap: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: COLORS.white,
         alignItems: 'center',
         justifyContent: 'center',
+        marginBottom: 24,
+        ...SHADOWS.md,
     },
-    radioInner: {
-        width: 14,
-        height: 14,
-        borderRadius: 7,
-        backgroundColor: '#000',
-    },
+    processingTitle: { fontSize: 20, fontWeight: '700', color: COLORS.textDark, marginBottom: 8 },
+    processingSubtitle: { fontSize: 14, color: COLORS.textGrey },
 
-    // Phone list specific
-    phoneText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: COLORS.textDark,
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 14 },
+    backBtn: {
+        width: 40, height: 40, borderRadius: 20,
+        backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center',
+        ...SHADOWS.sm,
     },
-    networkText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: COLORS.textGrey,
-        textTransform: 'uppercase',
-    },
+    headerText: {},
+    title: { fontSize: 20, fontWeight: '800', color: COLORS.textDark },
+    subtitle: { fontSize: 13, color: COLORS.textGrey },
 
-    // Footer
-    footer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: COLORS.background,
-        padding: 20,
-        borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
-    },
-    continueButton: {
-        backgroundColor: '#475569', // Dark Grey footer button
-        paddingVertical: 18,
-        borderRadius: 8,
+    stepRow: {
+        flexDirection: 'row',
         alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
     },
-    continueText: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: '600',
+    stepItem: { alignItems: 'center', gap: 4 },
+    stepDot: {
+        width: 26, height: 26, borderRadius: 13,
+        backgroundColor: COLORS.border,
+        alignItems: 'center', justifyContent: 'center',
     },
+    stepDotActive: { backgroundColor: COLORS.primary },
+    stepDotDone: { backgroundColor: COLORS.success },
+    stepNum: { fontSize: 11, fontWeight: '700', color: COLORS.textGrey },
+    stepNumActive: { color: COLORS.white },
+    stepLabel: { fontSize: 10, color: COLORS.textGrey, fontWeight: '500' },
+    stepLabelActive: { color: COLORS.primary, fontWeight: '700' },
+    stepLine: { flex: 1, height: 2, backgroundColor: COLORS.border, marginHorizontal: 4, marginBottom: 14 },
+    stepLineActive: { backgroundColor: COLORS.success },
 
-    // Others Flow - Inputs
-    dropdownSelector: {
+    scrollContent: { paddingHorizontal: 20, paddingBottom: 110 },
+
+    // Balance card
+    balanceCard: {
+        backgroundColor: COLORS.white,
+        borderRadius: 20,
+        padding: 18,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 8,
-        padding: 16,
-        backgroundColor: COLORS.white,
+        marginBottom: 24,
     },
-    networkIconCircle: {
-        width: 32,
-        height: 32,
+    balanceLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    balanceIconWrap: {
+        width: 48, height: 48, borderRadius: 24,
+        backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+    },
+    balanceLabel: { fontSize: 12, color: COLORS.textGrey, fontWeight: '500', marginBottom: 2 },
+    balanceValue: { fontSize: 20, fontWeight: '800', color: COLORS.textDark },
+    addUpBtn: {
+        backgroundColor: COLORS.primaryLight,
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+    },
+    addUpText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+
+    sectionLabel: { fontSize: 13, fontWeight: '700', color: COLORS.textGrey, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+    recipientToggle: {
+        flexDirection: 'row',
+        backgroundColor: COLORS.white,
         borderRadius: 16,
-        backgroundColor: '#64748B', // Dark grey placeholder
-        marginRight: 12,
+        padding: 4,
+        marginBottom: 24,
+        ...SHADOWS.sm,
     },
-    dropdownText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: COLORS.textDark,
+    toggleBtn: {
+        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        gap: 6, paddingVertical: 12, borderRadius: 12,
     },
-    fieldLabel: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: COLORS.textDark,
-        marginBottom: 8,
-    },
-    inputContainer: {
+    toggleBtnActive: { backgroundColor: COLORS.primary },
+    toggleText: { fontSize: 14, fontWeight: '700', color: COLORS.textGrey },
+    toggleTextActive: { color: COLORS.white },
+
+    selectCard: {
+        backgroundColor: COLORS.white,
+        borderRadius: 16,
+        padding: 16,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 8,
+        gap: 14,
+        marginBottom: 12,
+        borderWidth: 1.5,
+        borderColor: 'transparent',
+        ...SHADOWS.sm,
+    },
+    selectCardActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+    selectIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    selectCardTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textDark, marginBottom: 2 },
+    selectCardSub: { fontSize: 12, color: COLORS.textGrey },
+    checkCircle: {
+        width: 24, height: 24, borderRadius: 12,
+        borderWidth: 2, borderColor: COLORS.border,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    checkCircleActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+
+    dropdownBtn: {
+        backgroundColor: COLORS.white,
+        borderRadius: 14,
         padding: 16,
-        backgroundColor: COLORS.white,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 4,
+        ...SHADOWS.sm,
     },
-    inputText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.textDark,
-    },
+    networkDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.mtn },
+    dropdownText: { flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.textDark },
     dropdownList: {
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 8,
         backgroundColor: COLORS.white,
-        marginTop: 8,
+        borderRadius: 14,
         overflow: 'hidden',
+        marginBottom: 4,
     },
     dropdownOption: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: 16, paddingVertical: 14,
+        borderBottomWidth: 1, borderBottomColor: COLORS.border,
     },
-    dropdownOptionText: {
-        fontSize: 14,
-        color: COLORS.textDark,
-        fontWeight: '500',
-    },
+    dropdownOptionText: { fontSize: 15, fontWeight: '600', color: COLORS.textDark },
 
-    // Amount Step
-    helperLabel: {
-        fontSize: 12,
-        color: COLORS.textGrey,
-        marginBottom: 8,
-    },
-    amountInputContainer: {
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 4,
+    inputRow: {
         backgroundColor: COLORS.white,
+        borderRadius: 14,
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        marginBottom: 16,
-    },
-    amountInput: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: COLORS.textDark,
-    },
-    chipsRow: {
+        paddingVertical: 4,
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 24,
-        gap: 8,
-    },
-    chip: {
-        flex: 1,
-        paddingVertical: 10,
-        backgroundColor: '#E2E8F0', // Light grey default
-        borderRadius: 4,
         alignItems: 'center',
+        ...SHADOWS.sm,
     },
-    chipSelected: {
-        backgroundColor: '#93C5FD', // Light Blue selection
-        borderWidth: 1,
-        borderColor: '#3B82F6',
-    },
-    chipText: {
-        fontWeight: '600',
-        color: COLORS.textDark,
-        fontSize: 14,
-    },
-    chipTextSelected: {
-        color: '#1E3A8A',
-    },
-    summaryRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 8,
-    },
-    summaryLabel: {
-        fontSize: 12,
-        color: COLORS.textDark,
-        marginBottom: 4,
-    },
-    summaryValue: {
-        fontSize: 16,
-        fontWeight: '800', // Extra bold
-        color: COLORS.textDark,
-    },
+    input: { flex: 1, fontSize: 16, color: COLORS.textDark, paddingVertical: 14, fontWeight: '500' },
+    inputAction: { padding: 8 },
 
-    // Payment Step
-    paymentSummaryCard: {
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 4,
-        padding: 16,
-    },
-    paymentIconBox: {
-        backgroundColor: '#DBEAFE', // Light blue bg
-        padding: 8,
-        borderRadius: 4,
-        alignSelf: 'flex-start',
-    },
-    paymentSummaryLabel: {
-        fontSize: 12,
-        color: '#64748B',
-        marginBottom: 4,
-    },
-    paymentSummaryNumber: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: COLORS.textDark,
-    },
-    paymentSummaryValueLabel: {
-        fontSize: 12,
-        color: '#64748B',
-        marginBottom: 2,
-    },
-    paymentSummaryValue: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: COLORS.textDark,
-    },
-    paymentMethodCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    amountCard: {
         backgroundColor: COLORS.white,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 4,
-        padding: 16,
-    },
-    paymentMethodSelected: {
-        backgroundColor: '#F8FAFC', // Slightly grey when selected?
-        borderColor: '#E2E8F0',
-    },
-    paymentMethodIcon: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        marginRight: 12,
-    },
-    paymentMethodText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.textDark,
-    },
-
-    // Confirmation Step
-    detailsContainer: {
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 4,
-        marginBottom: 24,
-    },
-    detailRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
-        alignItems: 'center',
-    },
-    detailLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#94A3B8', // Grey text for label
-        flex: 1,
-    },
-    detailValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: COLORS.textDark,
-        textAlign: 'right',
-        flex: 1,
-    },
-    noticeCard: {
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 4,
+        borderRadius: 20,
         padding: 24,
         alignItems: 'center',
-        justifyContent: 'center',
+        marginBottom: 16,
+        ...SHADOWS.md,
     },
-    noticeIconCircle: {
-        width: 32,
-        height: 32,
+    amountHint: { fontSize: 13, color: COLORS.textGrey, fontWeight: '600', marginBottom: 12 },
+    amountInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+    currencySymbol: { fontSize: 22, fontWeight: '700', color: COLORS.textGrey },
+    amountInput: { fontSize: 48, fontWeight: '800', color: COLORS.textDark, minWidth: 100, textAlign: 'center' },
+    amountMinHint: { fontSize: 12, color: COLORS.textGrey },
+
+    chipsRow: { flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap' },
+    chip: {
+        paddingVertical: 10, paddingHorizontal: 18,
+        backgroundColor: COLORS.white,
+        borderRadius: 12,
+        borderWidth: 1.5, borderColor: COLORS.border,
+    },
+    chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+    chipText: { fontSize: 13, fontWeight: '700', color: COLORS.textGrey },
+    chipTextActive: { color: COLORS.white },
+
+    conversionCard: {
+        backgroundColor: COLORS.white,
+        borderRadius: 18,
+        padding: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    conversionItem: { flex: 1 },
+    conversionLabel: { fontSize: 12, color: COLORS.textGrey, fontWeight: '500', marginBottom: 4 },
+    conversionValue: { fontSize: 20, fontWeight: '800', color: COLORS.textDark },
+    conversionArrow: {
+        width: 40, height: 40, borderRadius: 20,
+        backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+        marginHorizontal: 8,
+    },
+
+    summaryCard: {
+        backgroundColor: COLORS.white,
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 20,
+    },
+    summaryHeader: { fontSize: 15, fontWeight: '800', color: COLORS.textDark, marginBottom: 14 },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
+    summaryLabel: { fontSize: 14, color: COLORS.textGrey, fontWeight: '500' },
+    summaryValue: { fontSize: 14, fontWeight: '700', color: COLORS.textDark, textAlign: 'right', flex: 1, marginLeft: 16 },
+    summaryDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 8 },
+
+    receiptCard: {
+        backgroundColor: COLORS.white,
+        borderRadius: 20,
+        overflow: 'hidden',
+        marginBottom: 16,
+    },
+    receiptHeader: {
+        backgroundColor: COLORS.primaryLight,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        padding: 18,
+    },
+    receiptIconWrap: {
+        width: 44, height: 44, borderRadius: 22,
+        backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center',
+        ...SHADOWS.sm,
+    },
+    receiptTitle: { fontSize: 16, fontWeight: '800', color: COLORS.primary },
+    receiptRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 18,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+    },
+    receiptLabel: { fontSize: 13, color: COLORS.textGrey, fontWeight: '500', flex: 1 },
+    receiptValue: { fontSize: 14, fontWeight: '700', color: COLORS.textDark, textAlign: 'right', flex: 1.5 },
+
+    noticeCard: {
+        backgroundColor: '#EFF6FF',
         borderRadius: 16,
-        backgroundColor: '#CBD5E1', // Grey circle
-        marginBottom: 12,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
     },
-    noticeTitle: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#64748B',
-        marginBottom: 4,
+    noticeIconWrap: { marginTop: 1 },
+    noticeTitle: { fontSize: 13, fontWeight: '700', color: COLORS.primary, marginBottom: 3 },
+    noticeText: { fontSize: 12, color: COLORS.textMid, lineHeight: 18 },
+
+    footer: {
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        backgroundColor: COLORS.white,
+        padding: 20,
+        paddingBottom: 32,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
     },
-    noticeText: {
-        fontSize: 12,
-        color: COLORS.textDark,
-        textAlign: 'center',
-    },
+    continueBtn: { borderRadius: 16, overflow: 'hidden', ...SHADOWS.primary },
+    continueBtnGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18 },
+    continueBtnText: { color: COLORS.white, fontSize: 17, fontWeight: '700' },
 });
