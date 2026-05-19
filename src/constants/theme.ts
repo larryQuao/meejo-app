@@ -1,11 +1,62 @@
 export const COLORS = {
-    primary: '#2A65F8',    // Primary Blue
-    secondary: '#1E2A8D',  // Dark Navy
-    background: '#F2F4F7', // Light Grey
+    primary: '#2A65F8',
+    primaryLight: '#EEF3FF',
+    primaryDark: '#1A45D8',
+    secondary: '#1E2A8D',
+    background: '#F4F6FA',
     white: '#FFFFFF',
-    textDark: '#1E2A8D',   // Using Navy for dark text for consistency
+    textDark: '#0F172A',
+    textMid: '#374151',
     textGrey: '#8A94A6',
+    textLight: '#CBD5E1',
     success: '#10B981',
+    successLight: '#ECFDF5',
     danger: '#EF4444',
-    border: '#E2E8F0',
+    dangerLight: '#FEF2F2',
+    warning: '#F59E0B',
+    warningLight: '#FFFBEB',
+    border: '#E8EDF5',
+    cardBg: '#FFFFFF',
+    // Network brand colors
+    mtn: '#FCD34D',
+    telecel: '#EF4444',
+    at: '#3B82F6',
+};
+
+export const SHADOWS = {
+    sm: {
+        shadowColor: '#94A3B8',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    md: {
+        shadowColor: '#94A3B8',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 4,
+    },
+    lg: {
+        shadowColor: '#94A3B8',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 20,
+        elevation: 8,
+    },
+    primary: {
+        shadowColor: '#2A65F8',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 16,
+        elevation: 8,
+    },
+    success: {
+        shadowColor: '#10B981',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 16,
+        elevation: 8,
+    },
 };
