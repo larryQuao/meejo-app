@@ -1,127 +1,127 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar as RNStatusBar, SafeAreaView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar as RNStatusBar, SafeAreaView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS } from '../constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS, SHADOWS } from '../constants/theme';
 import ExchangeScreen from './ExchangeScreen';
 import PurchaseScreen from './PurchaseScreen';
+import MoreScreen from './MoreScreen';
+import NotificationsScreen from './NotificationsScreen';
+import AdsCarousel from '../components/AdsCarousel';
+import AdBanner from '../components/AdBanner';
+import TransactionHistoryScreen from './TransactionHistoryScreen';
+import TransactionDetailScreen from './TransactionDetailScreen';
+import EditProfileScreen from './EditProfileScreen';
+import MyNumbersScreen from './MyNumbersScreen';
+import SavedBeneficiariesScreen from './SavedBeneficiariesScreen';
+import SavedCardsScreen from './SavedCardsScreen';
+import ChangePinScreen from './ChangePinScreen';
+import AccountScreen from './AccountScreen';
+import SecurityScreen from './SecurityScreen';
+import PreferencesScreen from './PreferencesScreen';
+import FaqScreen from './FaqScreen';
+import ChatSupportScreen from './ChatSupportScreen';
+import RateAppScreen from './RateAppScreen';
+import TermsPrivacyScreen from './TermsPrivacyScreen';
+import ReportBugScreen from './ReportBugScreen';
+import SubscriptionScreen from './SubscriptionScreen';
+import type { Transaction } from './TransactionHistoryScreen';
 
-const { width } = Dimensions.get('window');
 
-// Mock Data
 const history = [
-    { id: 1, title: 'Data Exchange', subtitle: '20 GB from AT to MTN', icon: 'swap-horizontal', color: '#94A3B8' },
-    { id: 2, title: 'Airtime Exchange to Data', subtitle: 'GHC 20.00', icon: 'phone-portrait-outline', color: '#94A3B8' },
-    { id: 3, title: 'Airtime Purchase', subtitle: 'GHC 20.00', icon: 'wallet-outline', color: '#94A3B8' },
+    { id: 1, title: 'Data Exchange', subtitle: '20 GB · MTN → AT', icon: 'swap-horizontal', iconBg: COLORS.primaryLight, iconColor: COLORS.primary, amount: '2.0 GB', positive: true },
+    { id: 2, title: 'Airtime to Data', subtitle: 'GHC 20.00 exchanged', icon: 'phone-portrait-outline', iconBg: '#FFF7ED', iconColor: '#F97316', amount: '290 MB', positive: true },
+    { id: 3, title: 'Airtime Purchase', subtitle: 'MTN · Self', icon: 'wallet-outline', iconBg: COLORS.successLight, iconColor: COLORS.success, amount: 'GHC 20', positive: false },
 ];
 
-function Dashboard({ onNavigate }: { onNavigate: (screen: string) => void }) {
+const QUICK_ACTIONS = [
+    { label: 'Purchase\nHub', icon: 'basket-outline', screen: 'Purchase', bg: COLORS.primaryLight, color: COLORS.primary },
+    { label: 'Swap\nAirtime', icon: 'swap-horizontal', screen: 'Exchange', bg: '#FFF7ED', color: '#F97316' },
+    { label: 'Swap\nData', icon: 'swap-vertical', screen: 'Exchange', bg: COLORS.successLight, color: COLORS.success },
+];
+
+function Dashboard({ onNavigate, onViewAllActivity }: { onNavigate: (screen: string) => void; onViewAllActivity: () => void }) {
     return (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-            {/* Banner / Carousel - Now Primary Blue */}
-            <View style={styles.bannerContainer}>
-                <View style={styles.bannerContent}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.bannerTitle}>Get discount when you exchange data</Text>
-                        <Text style={styles.bannerSubtitle}>Get up to 50% discount</Text>
-                    </View>
-                    <MaterialCommunityIcons name="star-circle-outline" size={48} color="rgba(255,255,255,0.2)" />
-                </View>
-                <TouchableOpacity style={styles.bannerButton} onPress={() => onNavigate('Exchange')}>
-                    <Text style={styles.bannerButtonText}>Exchange Now</Text>
-                </TouchableOpacity>
+            {/* Ads Carousel */}
+            <AdsCarousel onAdPress={() => onNavigate('Exchange')} />
 
-                {/* Carousel Indicators */}
-                <View style={styles.carouselIndicators}>
-                    <View style={[styles.indicator, styles.indicatorActive]} />
-                    <View style={styles.indicator} />
-                    <View style={styles.indicator} />
-                </View>
-            </View>
-
-            {/* Balances Section */}
-            <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Data & Airtime Balances</Text>
-                <TouchableOpacity style={styles.refreshButton}>
+            {/* Balance Cards */}
+            <View style={styles.sectionRow}>
+                <Text style={styles.sectionTitle}>Your Balances</Text>
+                <TouchableOpacity style={styles.refreshChip}>
+                    <Ionicons name="refresh" size={13} color={COLORS.primary} />
                     <Text style={styles.refreshText}>Refresh</Text>
-                    <Ionicons name="refresh" size={14} color={COLORS.primary} />
                 </TouchableOpacity>
             </View>
 
-            <View style={styles.balanceContainer}>
-                {/* Airtime Card */}
-                <View style={styles.balanceCard}>
-                    <View style={styles.balanceIconBg}>
+            <View style={styles.balanceRow}>
+                <View style={[styles.balanceCard, SHADOWS.md]}>
+                    <View style={[styles.balanceIconWrap, { backgroundColor: COLORS.primaryLight }]}>
                         <Ionicons name="call" size={20} color={COLORS.primary} />
                     </View>
-                    <Text style={styles.balanceLabel}>Airtime</Text>
-                    <Text style={styles.balanceValue}>GHC 783.00</Text>
-                    <TouchableOpacity style={styles.addUpButton}>
-                        <Text style={styles.addUpText}>Top Up</Text>
+                    <Text style={styles.balanceType}>Airtime</Text>
+                    <Text style={styles.balanceValue}>GHC 783</Text>
+                    <TouchableOpacity style={[styles.topUpBtn, { backgroundColor: COLORS.primaryLight }]}>
+                        <Text style={[styles.topUpText, { color: COLORS.primary }]}>Top Up</Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* Data Card */}
-                <View style={styles.balanceCard}>
-                    <View style={[styles.balanceIconBg, { backgroundColor: '#F0FDF4' }]}>
+                <View style={[styles.balanceCard, SHADOWS.md]}>
+                    <View style={[styles.balanceIconWrap, { backgroundColor: COLORS.successLight }]}>
                         <Ionicons name="wifi" size={20} color={COLORS.success} />
                     </View>
-                    <Text style={styles.balanceLabel}>Data</Text>
+                    <Text style={styles.balanceType}>Data</Text>
                     <Text style={styles.balanceValue}>783 GB</Text>
-                    <TouchableOpacity style={[styles.addUpButton, { backgroundColor: '#DCFCE7' }]}>
-                        <Text style={[styles.addUpText, { color: COLORS.success }]}>Top Up</Text>
+                    <TouchableOpacity style={[styles.topUpBtn, { backgroundColor: COLORS.successLight }]}>
+                        <Text style={[styles.topUpText, { color: COLORS.success }]}>Top Up</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Quick Actions Grid */}
-            <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Quick Actions</Text>
+            {/* Quick Actions */}
+            <Text style={[styles.sectionTitle, { marginBottom: 16 }]}>Quick Actions</Text>
+            <View style={styles.actionsRow}>
+                {QUICK_ACTIONS.map((action) => (
+                    <TouchableOpacity
+                        key={action.label}
+                        style={[styles.actionCard, SHADOWS.sm]}
+                        onPress={() => onNavigate(action.screen)}
+                        activeOpacity={0.75}
+                    >
+                        <View style={[styles.actionIconWrap, { backgroundColor: action.bg }]}>
+                            <Ionicons name={action.icon as any} size={26} color={action.color} />
+                        </View>
+                        <Text style={styles.actionLabel}>{action.label}</Text>
+                    </TouchableOpacity>
+                ))}
             </View>
 
-            <View style={styles.actionsGrid}>
-                <TouchableOpacity style={styles.actionItem} onPress={() => onNavigate('Purchase')}>
-                    <View style={[styles.actionIconCircle, { backgroundColor: '#E0F2FE' }]}>
-                        <MaterialCommunityIcons name="basket-outline" size={28} color={COLORS.primary} />
-                    </View>
-                    <Text style={styles.actionLabel}>Purchase{"\n"}Hub</Text>
-                </TouchableOpacity>
+            {/* Inline Ad */}
+            <AdBanner variant="partner" />
 
-                <TouchableOpacity style={styles.actionItem} onPress={() => onNavigate('Exchange')}>
-                    <View style={[styles.actionIconCircle, { backgroundColor: '#F0F9FF' }]}>
-                        <Ionicons name="swap-horizontal" size={28} color={COLORS.primary} />
-                    </View>
-                    <Text style={styles.actionLabel}>Swap{"\n"}Airtime</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.actionItem} onPress={() => onNavigate('Exchange')}>
-                    <View style={[styles.actionIconCircle, { backgroundColor: '#F0F9FF' }]}>
-                        <Ionicons name="swap-vertical" size={28} color={COLORS.primary} />
-                    </View>
-                    <Text style={styles.actionLabel}>Swap{"\n"}Data</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* Recent Purchases */}
-            <View style={styles.sectionHeader}>
+            {/* Recent Activity */}
+            <View style={[styles.sectionRow, { marginTop: 20 }]}>
                 <Text style={styles.sectionTitle}>Recent Activity</Text>
-                <TouchableOpacity>
-                    <Text style={{ color: COLORS.primary, fontWeight: '600', fontSize: 14 }}>View All</Text>
+                <TouchableOpacity onPress={onViewAllActivity} activeOpacity={0.75}>
+                    <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
             </View>
 
             <View style={styles.historyList}>
                 {history.map((item) => (
-                    <View key={item.id} style={styles.historyItem}>
-                        <View style={styles.historyIconCircle}>
-                            <Ionicons name={item.icon as any} size={20} color={COLORS.textGrey} />
+                    <View key={item.id} style={[styles.historyCard, SHADOWS.sm]}>
+                        <View style={[styles.historyIconWrap, { backgroundColor: item.iconBg }]}>
+                            <Ionicons name={item.icon as any} size={20} color={item.iconColor} />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.historyTitle}>{item.title}</Text>
                             <Text style={styles.historySubtitle}>{item.subtitle}</Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={16} color={COLORS.border} />
+                        <Text style={[styles.historyAmount, { color: item.positive ? COLORS.success : COLORS.textDark }]}>
+                            {item.amount}
+                        </Text>
                     </View>
                 ))}
             </View>
@@ -130,369 +130,301 @@ function Dashboard({ onNavigate }: { onNavigate: (screen: string) => void }) {
     );
 }
 
+type Overlay =
+    | null
+    | 'notifications'
+    | 'txHistory'
+    | 'account'
+    | 'security'
+    | 'preferences'
+    | 'editProfile'
+    | 'myNumbers'
+    | 'savedBeneficiaries'
+    | 'savedCards'
+    | 'changePin'
+    | 'faq'
+    | 'chatSupport'
+    | 'rateApp'
+    | 'termsPrivacy'
+    | 'reportBug'
+    | 'subscription'
+    | { screen: 'txDetail'; tx: Transaction };
+
 export default function HomeScreen() {
     const [activeTab, setActiveTab] = useState('Home');
     const [isTabBarVisible, setIsTabBarVisible] = useState(true);
+    const [overlay, setOverlay] = useState<Overlay>(null);
+
+    // Overlay screens take priority over tab content
+    if (overlay === 'notifications') {
+        return <NotificationsScreen onBack={() => setOverlay(null)} />;
+    }
+    if (overlay === 'txHistory') {
+        return (
+            <TransactionHistoryScreen
+                onBack={() => setOverlay(null)}
+                onSelectTransaction={(tx) => setOverlay({ screen: 'txDetail', tx })}
+            />
+        );
+    }
+    if (overlay !== null && typeof overlay === 'object' && overlay.screen === 'txDetail') {
+        return (
+            <TransactionDetailScreen
+                transaction={overlay.tx}
+                onBack={() => setOverlay('txHistory')}
+            />
+        );
+    }
+    if (overlay === 'editProfile') {
+        return <EditProfileScreen onBack={() => setOverlay(null)} />;
+    }
+    if (overlay === 'myNumbers') {
+        return <MyNumbersScreen onBack={() => setOverlay(null)} onUpgrade={() => setOverlay('subscription')} />;
+    }
+    if (overlay === 'savedBeneficiaries') {
+        return <SavedBeneficiariesScreen onBack={() => setOverlay(null)} />;
+    }
+    if (overlay === 'savedCards') {
+        return <SavedCardsScreen onBack={() => setOverlay(null)} />;
+    }
+    if (overlay === 'changePin') {
+        return <ChangePinScreen onBack={() => setOverlay(null)} onDone={() => setOverlay(null)} />;
+    }
+    if (overlay === 'account') {
+        return <AccountScreen onBack={() => setOverlay(null)} onNavigate={(s) => setOverlay(s as Overlay)} />;
+    }
+    if (overlay === 'security') {
+        return <SecurityScreen onBack={() => setOverlay(null)} onNavigate={(s) => setOverlay(s as Overlay)} />;
+    }
+    if (overlay === 'preferences') {
+        return <PreferencesScreen onBack={() => setOverlay(null)} onNavigate={(s) => setOverlay(s as Overlay)} />;
+    }
+    if (overlay === 'faq') {
+        return <FaqScreen onBack={() => setOverlay(null)} />;
+    }
+    if (overlay === 'chatSupport') {
+        return <ChatSupportScreen onBack={() => setOverlay(null)} />;
+    }
+    if (overlay === 'rateApp') {
+        return <RateAppScreen onBack={() => setOverlay(null)} />;
+    }
+    if (overlay === 'termsPrivacy') {
+        return <TermsPrivacyScreen onBack={() => setOverlay(null)} />;
+    }
+    if (overlay === 'reportBug') {
+        return <ReportBugScreen onBack={() => setOverlay(null)} />;
+    }
+    if (overlay === 'subscription') {
+        return <SubscriptionScreen onBack={() => setOverlay(null)} />;
+    }
 
     const renderContent = () => {
         switch (activeTab) {
-            case 'Home':
-                return <Dashboard onNavigate={setActiveTab} />;
-            case 'Exchange':
-                return <ExchangeScreen setTabBarVisible={setIsTabBarVisible} />;
-            case 'Purchase':
-                return <PurchaseScreen setTabBarVisible={setIsTabBarVisible} />;
-            case 'More':
-                return (
-                    <View style={styles.placeholderContainer}>
-                        <Text style={styles.placeholderText}>More Settings Screen</Text>
-                    </View>
-                );
-            default:
-                return <Dashboard onNavigate={setActiveTab} />;
+            case 'Home': return <Dashboard onNavigate={setActiveTab} onViewAllActivity={() => setOverlay('txHistory')} />;
+            case 'Exchange': return <ExchangeScreen setTabBarVisible={setIsTabBarVisible} />;
+            case 'Purchase': return <PurchaseScreen setTabBarVisible={setIsTabBarVisible} />;
+            case 'More': return <MoreScreen onNavigate={(s) => setOverlay(s as Overlay)} />;
+            default: return <Dashboard onNavigate={setActiveTab} onViewAllActivity={() => setOverlay('txHistory')} />;
         }
     };
+
+    const NAV_ITEMS = [
+        { id: 'Home', label: 'Home', icon: 'home', iconOutline: 'home-outline' },
+        { id: 'Exchange', label: 'Exchange', icon: 'swap-horizontal', iconOutline: 'swap-horizontal-outline' },
+        { id: 'Purchase', label: 'Purchase', icon: 'basket', iconOutline: 'basket-outline' },
+        { id: 'More', label: 'More', icon: 'grid', iconOutline: 'grid-outline' },
+    ];
 
     return (
         <View style={styles.container}>
             <StatusBar style="dark" backgroundColor={COLORS.background} />
             <SafeAreaView style={styles.safeArea}>
 
-                {/* Header - Profile & Greeting (Only show on Home, or customize for others. Let's keep for Home only or show simplified) */}
-                {activeTab === 'Home' ? (
+                {/* Home Header */}
+                {activeTab === 'Home' && (
                     <View style={styles.header}>
-                        <View style={styles.profileRow}>
-                            <Ionicons name="person-circle" size={32} color={COLORS.textDark} />
-                            <View style={styles.phoneContainer}>
-                                <Text style={styles.phoneNumber}>055 482 4425</Text>
-                                <Ionicons name="chevron-down" size={16} color={COLORS.textDark} />
+                        <View style={styles.headerLeft}>
+                            <View style={styles.avatarWrap}>
+                                <Ionicons name="person" size={20} color={COLORS.primary} />
+                            </View>
+                            <View>
+                                <Text style={styles.greetingSmall}>Good morning</Text>
+                                <Text style={styles.greetingName}>Reynolds 👋</Text>
                             </View>
                         </View>
-                        <Text style={styles.greeting}>Hey Reynolds!</Text>
-                    </View>
-                ) : null}
-
-                {/* Content Area */}
-                <View style={{ flex: 1 }}>
-                    {renderContent()}
-                </View>
-
-                {/* Bottom Navigation */}
-                {isTabBarVisible && (
-                    <View style={styles.bottomNav}>
-                        <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Home')}>
-                            <View style={[styles.navIconContainer, activeTab === 'Home' && styles.navIconActive]}>
-                                <Ionicons name="home" size={24} color={activeTab === 'Home' ? COLORS.white : COLORS.textGrey} />
-                            </View>
-                            <Text style={[styles.navText, activeTab === 'Home' && styles.navTextActive]}>Home</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Exchange')}>
-                            <View style={[styles.navIconContainer, activeTab === 'Exchange' && styles.navIconActive]}>
-                                <Ionicons name="swap-horizontal" size={24} color={activeTab === 'Exchange' ? COLORS.white : COLORS.textGrey} />
-                            </View>
-                            <Text style={[styles.navText, activeTab === 'Exchange' && styles.navTextActive]}>Exchange</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Purchase')}>
-                            <View style={[styles.navIconContainer, activeTab === 'Purchase' && styles.navIconActive]}>
-                                <Ionicons name="basket-outline" size={24} color={activeTab === 'Purchase' ? COLORS.white : COLORS.textGrey} />
-                            </View>
-                            <Text style={[styles.navText, activeTab === 'Purchase' && styles.navTextActive]}>Purchase</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('More')}>
-                            <View style={[styles.navIconContainer, activeTab === 'More' && styles.navIconActive]}>
-                                <Ionicons name="grid-outline" size={24} color={activeTab === 'More' ? COLORS.white : COLORS.textGrey} />
-                            </View>
-                            <Text style={[styles.navText, activeTab === 'More' && styles.navTextActive]}>More</Text>
+                        <TouchableOpacity style={styles.notifBtn} onPress={() => setOverlay('notifications')} activeOpacity={0.75}>
+                            <Ionicons name="notifications-outline" size={22} color={COLORS.textDark} />
+                            <View style={styles.notifDot} />
                         </TouchableOpacity>
                     </View>
                 )}
 
+                {/* Content */}
+                <View style={{ flex: 1 }}>{renderContent()}</View>
+
+                {/* Bottom Nav */}
+                {isTabBarVisible && (
+                    <View style={[styles.bottomNav, SHADOWS.lg]}>
+                        {NAV_ITEMS.map((item) => {
+                            const isActive = activeTab === item.id;
+                            return (
+                                <TouchableOpacity
+                                    key={item.id}
+                                    style={styles.navItem}
+                                    onPress={() => setActiveTab(item.id)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={[styles.navIconWrap, isActive && styles.navIconWrapActive]}>
+                                        <Ionicons
+                                            name={(isActive ? item.icon : item.iconOutline) as any}
+                                            size={22}
+                                            color={isActive ? COLORS.white : COLORS.textGrey}
+                                        />
+                                    </View>
+                                    <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+                                        {item.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
             </SafeAreaView>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: COLORS.background,
-    },
-    safeArea: {
-        flex: 1,
-        paddingTop: RNStatusBar.currentHeight || 40,
-    },
-    scrollContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 110, // Space for bottom nav
-    },
-    placeholderContainer: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    placeholderText: {
-        fontSize: 18,
-        color: COLORS.textGrey,
-    },
+    container: { flex: 1, backgroundColor: COLORS.background },
+    safeArea: { flex: 1, paddingTop: RNStatusBar.currentHeight || 40 },
+    scrollContent: { paddingHorizontal: 20, paddingBottom: 120 },
+    placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+    placeholderText: { fontSize: 16, color: COLORS.textGrey, fontWeight: '500' },
 
     // Header
     header: {
-        paddingHorizontal: 20,
-        marginBottom: 20,
-    },
-    profileRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        marginBottom: 10,
-        justifyContent: 'center', // Centering based on mockup
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingBottom: 16,
     },
-    phoneContainer: {
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    avatarWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: COLORS.primaryLight,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    greetingSmall: { fontSize: 12, color: COLORS.textGrey, fontWeight: '500' },
+    greetingName: { fontSize: 17, fontWeight: '800', color: COLORS.textDark },
+    notifBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: COLORS.white,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...SHADOWS.sm,
+    },
+    notifDot: {
+        position: 'absolute',
+        top: 9,
+        right: 9,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: COLORS.danger,
+        borderWidth: 1.5,
+        borderColor: COLORS.white,
+    },
+
+    // Section Headers
+    sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+    sectionTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textDark },
+    viewAllText: { color: COLORS.primary, fontWeight: '700', fontSize: 13 },
+    refreshChip: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-    },
-    phoneNumber: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: COLORS.textDark,
-    },
-    greeting: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: COLORS.textDark,
-        textAlign: 'center',
-    },
-
-    // Banner
-    bannerContainer: {
-        backgroundColor: COLORS.primary,
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 30,
-        // Shadow
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
-        elevation: 8,
-    },
-    bannerContent: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 20,
-    },
-    bannerTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: COLORS.white,
-        marginBottom: 8,
-        lineHeight: 26,
-    },
-    bannerSubtitle: {
-        fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.8)',
-        marginBottom: 0,
-    },
-    bannerButton: {
-        backgroundColor: COLORS.white,
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        alignSelf: 'flex-start',
-        borderRadius: 12,
-    },
-    bannerButtonText: {
-        color: COLORS.primary,
-        fontWeight: '700',
-        fontSize: 14,
-    },
-    carouselIndicators: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 6,
-        marginTop: 20,
-        position: 'absolute',
-        bottom: 20,
-        right: 20,
-    },
-    indicator: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    },
-    indicatorActive: {
-        backgroundColor: COLORS.white,
-        width: 18,
-    },
-
-    // Sections Common
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-        paddingHorizontal: 4,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: COLORS.textDark,
-    },
-    refreshButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#E0F2FE',
-        paddingVertical: 6,
+        backgroundColor: COLORS.primaryLight,
+        paddingVertical: 5,
         paddingHorizontal: 10,
         borderRadius: 20,
-        gap: 4,
     },
-    refreshText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: COLORS.primary,
-    },
-    viewAllButton: {
-        // Obsolete
-    },
-    viewAllText: {
-        // Obsolete
-    },
+    refreshText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
 
     // Balance Cards
-    balanceContainer: {
-        flexDirection: 'row',
-        gap: 16,
-        marginBottom: 32,
-    },
+    balanceRow: { flexDirection: 'row', gap: 14, marginBottom: 28 },
     balanceCard: {
         flex: 1,
         backgroundColor: COLORS.white,
-        padding: 20,
         borderRadius: 24,
+        padding: 18,
         alignItems: 'flex-start',
-        // Shadow
-        shadowColor: '#64748B',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 4,
     },
-    balanceIconBg: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#E0F2FE',
+    balanceIconWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 12,
     },
-    balanceLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: COLORS.textGrey,
-        marginBottom: 4,
-    },
-    balanceValue: {
-        fontSize: 22,
-        fontWeight: '800',
-        color: COLORS.textDark,
-        marginBottom: 16,
-    },
-    addUpButton: {
-        backgroundColor: '#E0F2FE',
-        paddingVertical: 8,
-        paddingHorizontal: 16,
-        borderRadius: 12,
+    balanceType: { fontSize: 13, fontWeight: '600', color: COLORS.textGrey, marginBottom: 4 },
+    balanceValue: { fontSize: 22, fontWeight: '800', color: COLORS.textDark, marginBottom: 14 },
+    topUpBtn: {
         width: '100%',
+        paddingVertical: 8,
+        borderRadius: 12,
         alignItems: 'center',
     },
-    addUpText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: COLORS.primary,
-    },
+    topUpText: { fontSize: 12, fontWeight: '700' },
 
     // Quick Actions
-    actionsGrid: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 32,
-        gap: 12,
-    },
-    actionItem: {
+    actionsRow: { flexDirection: 'row', gap: 12, marginBottom: 28 },
+    actionCard: {
         flex: 1,
         backgroundColor: COLORS.white,
-        padding: 16,
         borderRadius: 20,
+        paddingVertical: 18,
+        paddingHorizontal: 10,
         alignItems: 'center',
-        justifyContent: 'center',
         minHeight: 110,
-        // Shadow
-        shadowColor: '#64748B',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    actionIconCircle: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        marginBottom: 12,
-        alignItems: 'center',
         justifyContent: 'center',
     },
-    actionLabel: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: COLORS.textDark,
-        textAlign: 'center',
-        lineHeight: 16,
+    actionIconWrap: {
+        width: 54,
+        height: 54,
+        borderRadius: 27,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
     },
+    actionLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textDark, textAlign: 'center', lineHeight: 17 },
 
     // History
-    historyList: {
-        gap: 16,
-        paddingBottom: 20,
-    },
-    historyItem: {
+    historyList: { gap: 12, paddingBottom: 8 },
+    historyCard: {
+        backgroundColor: COLORS.white,
+        borderRadius: 20,
+        padding: 16,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.white,
-        padding: 16,
-        borderRadius: 20,
-        gap: 16,
-        // Shadow
-        shadowColor: '#64748B',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        elevation: 1,
+        gap: 14,
     },
-    historyIconCircle: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#F1F5F9',
+    historyIconWrap: {
+        width: 46,
+        height: 46,
+        borderRadius: 23,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    historyTitle: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: COLORS.textDark,
-        marginBottom: 2,
-    },
-    historySubtitle: {
-        fontSize: 12,
-        color: COLORS.textGrey,
-    },
+    historyTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textDark, marginBottom: 3 },
+    historySubtitle: { fontSize: 12, color: COLORS.textGrey },
+    historyAmount: { fontSize: 14, fontWeight: '800' },
 
     // Bottom Nav
     bottomNav: {
@@ -500,37 +432,25 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: '#F1F5F9',
+        backgroundColor: COLORS.white,
         flexDirection: 'row',
         justifyContent: 'space-around',
-        paddingVertical: 12,
-        paddingBottom: 20,
-        borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
+        paddingVertical: 10,
+        paddingBottom: 22,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        borderTopWidth: 0,
     },
-    navItem: {
+    navItem: { alignItems: 'center', gap: 4, paddingHorizontal: 8 },
+    navIconWrap: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 4,
+        backgroundColor: 'transparent',
     },
-    navIconContainer: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#CBD5E1',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    navIconActive: {
-        backgroundColor: COLORS.primary,
-    },
-    navText: {
-        fontSize: 10,
-        fontWeight: '600',
-        color: COLORS.textGrey,
-    },
-    navTextActive: {
-        color: COLORS.primary,
-        fontWeight: '700',
-    },
+    navIconWrapActive: { backgroundColor: COLORS.primary },
+    navLabel: { fontSize: 10, fontWeight: '600', color: COLORS.textGrey },
+    navLabelActive: { color: COLORS.primary, fontWeight: '700' },
 });
